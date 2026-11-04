@@ -194,6 +194,12 @@ sandbox/         LLM 工具沙盒：browser.ts + cdp-client.ts 是**唯一的浏
 > 「只有 Edge 才发这个头」由类型保证（`gecHeaders` 只收版本号），不做 UA 正则嗅探。
 > 详见 [docs/PROTOCOL.md](docs/PROTOCOL.md) 的「sec-ms-gec」一节。
 
+## 编码规范
+
+- 4 空格缩进，无分号，字符串用单引号（与 [.prettierrc.json](.prettierrc.json) 一致：`printWidth` 79、`endOfLine` crlf、`trailingComma` es5）。
+- git 提交格式：`feat|fix|project|refactor|example|chore: 一句话英文描述`，例如 `feat: add a new ui button`。
+  默认情况不需要正文，只需要概要。
+
 ## 发版（GitHub Actions → npm）
 
 **包名 `bing-search-reverse`，仓库 `github.com/tq-xyy/bing-search-reverse`**，
