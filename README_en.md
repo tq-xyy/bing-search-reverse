@@ -18,17 +18,22 @@ Scrape `cn.bing.com` search results straight from HTML SSR over `fetch` (undici,
 
 ## Install
 
-Not published to npm yet — install from GitHub:
+```bash
+npm i bing-search-reverse
+```
+
+You can also install straight from GitHub (the `prepare` script builds on install):
 
 ```bash
 npm i github:tq-xyy/bing-search-reverse
 ```
 
-`dist/` is not committed; the `prepare` script builds it on install.
+The npm release ships prebuilt artifacts; on the GitHub path `dist/` is not committed and the
+`prepare` script builds it during install.
 
-> **pnpm ≥ 12 users**: build scripts of git dependencies are blocked by default, which fails with
-> `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`. Allow it in `pnpm-workspace.yaml` (the key must be the
-> full package spec):
+> **pnpm ≥ 12 users** (GitHub path only): build scripts of git dependencies are blocked by default,
+> which fails with `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`. Allow it in `pnpm-workspace.yaml`
+> (the key must be the full package spec):
 >
 > ```yaml
 > allowBuilds:

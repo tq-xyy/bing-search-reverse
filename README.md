@@ -16,16 +16,21 @@
 
 ## 安装
 
-尚未发布到 npm registry，直接从 GitHub 装：
+```bash
+npm i bing-search-reverse
+```
+
+也可以直接从 GitHub 装（走 `prepare` 现场构建）：
 
 ```bash
 npm i github:tq-xyy/bing-search-reverse
 ```
 
-`dist/` 不进仓库，由 `package.json` 的 `prepare` 脚本在安装时自动构建。
+通过 npm 安装时带的是预构建产物；走 GitHub 时 `dist/` 不进仓库，由 `package.json` 的
+`prepare` 脚本在安装时自动构建。
 
-> **pnpm ≥ 12 用户**：默认不信任 git 依赖的构建脚本，会报 `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`。
-> 需在 `pnpm-workspace.yaml` 里精确放行（键必须是完整的包 spec）：
+> **pnpm ≥ 12 用户**（仅 GitHub 安装路径）：默认不信任 git 依赖的构建脚本，会报
+> `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`。需在 `pnpm-workspace.yaml` 里精确放行（键必须是完整的包 spec）：
 >
 > ```yaml
 > allowBuilds:
