@@ -56,9 +56,9 @@
 ### 2. 单连接多路复用
 
 fetch 8 并发建了 8 条连接。对本库的压测形态（`Promise.all(词表)`）意味着
-连接数 = 并发数。这是"礼貌性"损失而非正确性损失；需要时可换
+连接数 = 并发数。这是“礼貌性”损失而非正确性损失；需要时可换
 `undici.Agent({ allowH2: true, connections: 1 })` 作为 dispatcher 找回，
-但那会把 undici 从"Node 内置实现"变成显式依赖。
+但那会把 undici 从“Node 内置实现”变成显式依赖。
 
 ## 不采用的替代
 
@@ -67,7 +67,7 @@ fetch 8 并发建了 8 条连接。对本库的压测形态（`Promise.all(词�
 | 保留 http2，只砍到骨架                              | 仍要自己维护解压/超时/set-cookie，等于继续重写 undici                                                                                         |
 | `fetch-cookie` 包装层                               | 实测同一 jar 下并发三个词拿到 101/101/99KB 骨架，而裸 fetch 传 cookie 串是 371~384KB 填充。竞态原因未隔离验证，但足够说明**jar 应归我们持有** |
 | `p-retry` 代替手写重试                              | 语义对得上（`AbortError` → 立即终止），但重试循环里还嵌着 `invalidateSession()`，逻辑量没减少                                                 |
-| 用 `@exhumer/undici-cookie-agent` 之类 agent 级 jar | 引入 dispatcher 层，比"每次请求现取 cookie 串"更难观测；且我们要在两次请求之间**改写** `SRCHHPGUSR`                                           |
+| 用 `@exhumer/undici-cookie-agent` 之类 agent 级 jar | 引入 dispatcher 层，比“每次请求现取 cookie 串”更难观测；且我们要在两次请求之间**改写** `SRCHHPGUSR`                                           |
 
 ## 换 jar 踩到的坑（已处理）
 
@@ -81,7 +81,7 @@ getCookieString() 返回旧的那条 → 值停在 "SRCHLANG=zh-Hans"
 ```
 
 `mergeSrchhpgusr` 现在从 `jar.getCookies()` 读回原 cookie 的 domain/path 再写。
-这是换 jar 唯一的真实坑（旧的字符串拼接天然"同名替换"，不存在此问题）。
+这是换 jar 唯一的真实坑（旧的字符串拼接天然“同名替换”，不存在此问题）。
 
 ## 验证
 

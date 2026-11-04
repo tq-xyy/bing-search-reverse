@@ -2,7 +2,7 @@
 
 > ⚠️ **已被 [fetch-over-http2.md](fetch-over-http2.md) 取代（2026-10-24）。**
 > 传输改用全局 `fetch` 后，连接归 undici 连接池管理，不再有 ref handle，
-> 也不存在 unref/ref 记账。下文保留为历史证据（"只 unref 不够"那条反例仍然是
+> 也不存在 unref/ref 记账。下文保留为历史证据（“只 unref 不够”那条反例仍然是
 > 关于 Node handle 的正确结论，只是不再适用于本项目的传输层）。
 
 ## 结论
@@ -17,11 +17,11 @@ HTTP/2 连接的生命周期与进程的生命周期解耦：
 | 请求结束 / 超时 / 失败 | **unref**                         |
 
 对外只暴露 `invalidateSession()`（销毁当前连接并清空缓存，下一次
-`getSession()` 重新建连），它同时是"立即归还 fd"的手段。
+`getSession()` 重新建连），它同时是“立即归还 fd”的手段。
 **不存在 `closeSession()`**——2026-10 重构已删除，进程退出不再依赖任何
 调用方记得关连接。
 
-> 2026-10-18 后续：会话 TTL 与 `retire()` 已删除，连接改为"能用就一直用"。
+> 2026-10-18 后续：会话 TTL 与 `retire()` 已删除，连接改为“能用就一直用”。
 > 见 [no-session-ttl.md](no-session-ttl.md)。
 
 ## 根因
@@ -32,7 +32,7 @@ libuv 的事件循环就排不空，`process` 不退出。旧的 `session.ts` �
 
 - CLI：必须在最后显式关闭连接（旧 API），否则命令跑完也不返回；
 - 库的下游（chatxt 等）：同样必须记得在退出前调，漏一次就挂住进程，
-  而且是**静默**挂住——业务日志早已打完，看起来像"进程卡死"。
+  而且是**静默**挂住——业务日志早已打完，看起来像“进程卡死”。
 
 2026-09 的 CDP 时代已经踩过同型坑（`child.stdio` 是 ref 的 Socket，
 `beforeExit` 永不触发，见 [HISTORY.md](../HISTORY.md)）。
@@ -43,13 +43,13 @@ libuv 的事件循环就排不空，`process` 不退出。旧的 `session.ts` �
 | ------------------------------------------------ | ------------------------------------------------------------------------------------ |
 | 建连后保持 ref，不发请求、不关闭                 | 进程 15s 仍未退出（被 SIGTERM 强杀）                                                 |
 | 建连后 `unref()`                                 | **296ms 内自然退出**                                                                 |
-| `unref()` 后直接发请求并 `await`                 | **进程 316ms 退出**，顶层 await 永不 settle（exit 13 + "unsettled top-level await"） |
+| `unref()` 后直接发请求并 `await`                 | **进程 316ms 退出**，顶层 await 永不 settle（exit 13 + “unsettled top-level await”） |
 | `unref()` → `ref()` → 请求 → `unref()`           | 请求成功（302 / 130B），进程 450ms 退出                                              |
 | 生产链路：连续 3 次 `searchByBing`，不调关闭函数 | pages = 10/10/10，进程 3.95s 自然退出                                                |
 | 生产链路：`Promise.all` 并发 3 次查询            | pages = 10/9/10，进程 2.18s 自然退出                                                 |
 
 第三行是**最关键的反例**：只 `unref` 不够。unref 之后发起请求，
-Node 不会因为"有活跃 stream"而把 socket 重新 ref 住——stream 本身不是
+Node 不会因为“有活跃 stream”而把 socket 重新 ref 住——stream 本身不是
 ref 源。若不补 `ref()`，库会在最需要它工作的时候让进程退出。
 
 ## 不采用的方案
@@ -107,6 +107,6 @@ pnpm test:live        # connection.test.ts 的「不调关闭函数时进程自�
 
 ## 相关
 
-- [ARCHITECTURE.md](../ARCHITECTURE.md) 的"连接生命周期"
+- [ARCHITECTURE.md](../ARCHITECTURE.md) 的「传输与会话」一节
 - [no-session-ttl.md](no-session-ttl.md)：为什么删掉会话 TTL
 - [HISTORY.md](../HISTORY.md)：同型的 ref handle 挂住进程问题

@@ -2,7 +2,7 @@
 
 ## 策略：用 DOM，不用正则
 
-正则**没有计数器**，做不到"按标签深度配对"。实测最小复现：
+正则**没有计数器**，做不到“按标签深度配对”。实测最小复现：
 
 ```html
 <li class="b_ans">
@@ -51,7 +51,7 @@ selectAll('li.b_algo', doc) // 任意次
 - **块级**元素（`br`/`p`/`div`/`li`/`h2`…）边界补一个空格 → 否则 snippet 的多行会粘连
 - **行内**元素（`strong`/`b`/`em`/`span`/`a`）边界不补 → 否则高亮词会和相邻文字被劈开
 
-这条规则是"空格在标签内还是标签外"的直接翻译：
+这条规则是“空格在标签内还是标签外”的直接翻译：
 `<strong>洛天依</strong> 官网` 里的空格**在标签外**，只删标签就自动保留；
 `<strong>洛天依</strong>歌手` 本来就没有空格，删标签后自然贴上。
 
@@ -72,7 +72,7 @@ Bing 的时间有三种写法，页面上**没有**机器可读的绝对时间�
   （2026-10-18 实测：两个不同视频的 published 都是 `2026-08-19 06:50`）
 - 字符串仍是**前缀可比**的：字典序 == 时间序，排序不需要解析成 Date
 - 月按 30 天、年按 365 天近似；误差上限是一个精度单位（day 精度 ±1 天）
-- 认不出的（"昨天"、"刚刚"、"3 days ago"）返回 `undefined`，**不猜**
+- 认不出的（“昨天”、“刚刚”、“3 days ago”）返回 `undefined`，**不猜**
 - 搜索结果的日期前缀必须满足「行首 + 后接 `·`」，否则正文年份会被误判
   （见 `extractDatePrefix`）；资讯卡 footer 形如 `凤凰网科技 · 10 小时`，
   时间取最后一个 `·` 之后
@@ -146,8 +146,7 @@ for (const item of items) {
 > marker 常量、由 `layout.ts` 汇总，而生产侧从不读取该结果，只为测试断言存在；
 > 且 `WEB_PAGE_SELECTOR` 含 `h2 a`、`.b_caption` 这类过宽特征，恒不触发。
 > 同一批保护改由「离线样本必须解析出结果」承担（`tests/offline/samples.test.ts`
->
-> - `parsers.test.ts` 的 20 个样本），断言的是**真实产出**而不是常量表的自洽性。
+> 与 `parsers.test.ts` 的 20 个样本），断言的是**真实产出**而不是常量表的自洽性。
 
 新增卡片类型要做什么：在 `parse/index.ts` 的循环里加分支，并补一个离线样本。
 
@@ -235,7 +234,7 @@ body = JSON.stringify({ Question, Feed, Language, Url })
 
 用户可能在浏览器里看到 `li.b_algo.b_vtl_deeplinks.qbrs`，但当前服务端响应
 （含 CDP 渲染后的 VCP 页面）并不稳定下发该节点。解析层只做“存在则解析”：
-缺省即没有，不承诺覆盖率。详见 history 2026-10-18。
+缺省即没有，不承诺覆盖率（2026-10-18 观测）。
 
 ## 字段选择器表
 
@@ -270,7 +269,7 @@ body = JSON.stringify({ Question, Feed, Language, Url })
 | 条目        | `.mc_vtvc`                       | 卡尾 `<template>` 里也有同名元素，需排除        |
 | 链接/aria   | `a.mc_vtvc_link`                 | aria-label 是超长拼接串，只作兜底               |
 | 标题        | `.mc_vtvc_title` 的 `title` 属性 | 比取文本干净                                    |
-| 时长        | `.mc_bc.items`                   | "5:31" / "2:40:13"                              |
+| 时长        | `.mc_bc.items`                   | “5:31” / “2:40:13”                              |
 | 站点/上传者 | `.mc_vtvc_meta_channel span`     | 第 2 个带 `mc_vtvc_meta_row_channel`            |
 | 播放量      | `.meta_vc_content`               | —                                               |
 | 发布时间    | `.meta_pd_content`               | —                                               |
@@ -295,7 +294,7 @@ body = JSON.stringify({ Question, Feed, Language, Url })
 | 条目     | `a.iacf_imglnk`                         | 只认它内部的 `data-src`                                              |
 | 缩略图   | `[data-src]`                            | 卡内**没有 `<img>`**，且共 11 个 data-src（10 真图 + 1 个 svg 图标） |
 | 标题     | `.imgInfo` 的 `title` → `a[aria-label]` | —                                                                    |
-| 显示尺寸 | `.cico` 的 `style`                      | "width:122px;height:128px"                                           |
+| 显示尺寸 | `.cico` 的 `style`                      | “width:122px;height:128px”                                           |
 | 原图     | detailUrl 的 `mediaurl` 参数            | 只解一层；R-C 代理时内部 `riu` 再解一层                              |
 | 原图尺寸 | `expw` / `exph`                         | —                                                                    |
 
@@ -308,10 +307,10 @@ body = JSON.stringify({ Question, Feed, Language, Url })
 | `cht_*`（AI Overview）       | `.cht_text` | Markdown 片段：`p` / `ul,ol` / `pre>code` / `h2,h3` | `a.md_citlink` 的 href，站点名在 `.md_citlink__site` |
 | `gs_*`（Generative Summary） | `.gs_text`  | `.gs_p`                                             | `.gs_cit` 的 `data-url`                              |
 
-只支持 cht 型时，gs 型答案卡会被整体判为"没有 overview"。
+只支持 cht 型时，gs 型答案卡会被整体判为“没有 overview”。
 
 cht 型正文是 **Markdown 渲染结果**，`paragraphs` 直接还原成 Markdown 片段
-（2026-10-18 修复，见 history）：
+（2026-10-18 修复，见 [HISTORY.md](HISTORY.md) §4.4）：
 
 | 原 DOM           | 输出                                                       |
 | ---------------- | ---------------------------------------------------------- |
@@ -342,7 +341,7 @@ cht 型正文是 **Markdown 渲染结果**，`paragraphs` 直接还原成 Markdo
 | `&hellip;` | 字面量   | …           |
 | `&middot;` | 字面量   | ·           |
 
-例外：`&#0183;` 是**八进制**字符引用（= "·"），两者都正确处理。
+例外：`&#0183;` 是**八进制**字符引用（= “·”），两者都正确处理。
 但如果手工喂未解码的原始片段给 `extractDatePrefix`，它内部会做一次归一化
 （见 `normalizeDateSeparators`）。
 
@@ -359,7 +358,7 @@ cht 型正文是 **Markdown 渲染结果**，`paragraphs` 直接还原成 Markdo
 | 视频卡   | 3/5                    | 强查询依赖                                |
 | 内嵌视频 | 3/5                    | 与视频卡**不重合**                        |
 | 资讯     | 2/5                    | 强查询依赖                                |
-| 图片卡   | 1/5                    | 仅"可视觉化实体"查询                      |
+| 图片卡   | 1/5                    | 仅“可视觉化实体”查询                      |
 | 答案摘要 | 2/5                    | 约 8%~33%                                 |
 
 cards3 补充的组件覆盖（9 份样本）：
@@ -381,11 +380,11 @@ cards4（2026-10-24 抓取，4 份）专测**「我们不解析的卡片」的�
 | `青衣 歌词`        | 视频卡 `b_ans b_vidAns`               | `.mc_vtvc` ×3                              | 3 条 video + 10 条 page                            |
 | `Pyton socket`     | 纠错卡 `#b_suptop` + wpt 网格 `b_ans` | `.sp_requery`/`.sp_recourse` + `.b_wpt_bl` | `correct` 字段 + wpt 主结果收进 pages              |
 
-### 为什么"不解析"也要测
+### 为什么“不解析”也要测
 
 词条卡与汇率卡都**没有 `h2 a`、没有 `.tptt`**，它们靠 `common-module-*` /
 `fin_*` 那套 DOM 渲染。这让 `extractWebDigest` 天然收不到它们——但这只是
-"当前选择器恰好不匹配"，不是设计约束。加上断言把这条性质锁住：
+“当前选择器恰好不匹配”，不是设计约束。加上断言把这条性质锁住：
 **新卡片类型出现时，主结果集不能多一条也不能少一条。**
 
 ### 纠错提示（`SearchResult.correct`）
@@ -400,8 +399,8 @@ cards4（2026-10-24 抓取，4 份）专测**「我们不解析的卡片」的�
 
 → 用户看到的是拼起来的整句：「以下是 Python socket 的结果。改为搜索 Pyton socket?」
 
-**两段必须一起给**。只给前段（"以下是 X 的结果。"）读起来像正常结果页的标题，
-**没有明示"你搜错了"**——正是后段的"改为搜索 …?"点破这件事。
+**两段必须一起给**。只给前段（“以下是 X 的结果。”）读起来像正常结果页的标题，
+**没有明示“你搜错了”**——正是后段的“改为搜索 …?”点破这件事。
 
 文案是**灰度可变的**，2026-10-24 当天同一查询先后见过两套：
 
@@ -437,5 +436,5 @@ wpt 网格主结果会被单独遍历一遍 `.b_wpt_bl`，只收带 `.b_tpcn`
 `text(parse('<div><style>.x{color:red}</style><p>正文</p></div>'))`
 = `".x{color:red} 正文"`。纠错卡内部有一个 7.4 万字符的 `<style>`。目前
 不泄漏到任何输出字段（提取器都走具体选择器，不取整容器文本）；但一旦有卡片
-走 `readGs` 的"整段文本"兜底分支，CSS 会进 `overview.paragraphs`。真实样本里
+走 `readGs` 的“整段文本”兜底分支，CSS 会进 `overview.paragraphs`。真实样本里
 `.gs_text` 内部暂无 `<style>`。

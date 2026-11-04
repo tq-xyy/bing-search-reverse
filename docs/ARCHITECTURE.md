@@ -53,7 +53,7 @@ protocol.ts  →  （无同项目依赖，只有字符串与纯函数）
 - **parse/ 是纯函数层**：零 IO、零异步、零 `process.env`，唯一的外部输入是
   `(html, nowMs)`。这让它能在断网环境下被单测直接调用。
 - **nowMs 必须从上层注入**，解析层自己不调 `Date.now()`。
-  否则相对时间（"6 天之前"）的测试无法确定性断言。
+  否则相对时间（“6 天之前”）的测试无法确定性断言。
 - **出口裁剪不在 parse/ 里**：`shape.ts` 是策略，解析器只负责「能抓到就抓」。
 
 ## utils/ · protocol/ · parse/ 的边界
@@ -134,7 +134,7 @@ TCP+TLS 握手（约 250ms）。详见 [decisions/no-session-ttl.md](decisions/n
 结果流容器也只枚举一次（`collectContainers`），再按 class 分给各提取器。
 实测总耗时基本持平，**收益在正确性不在速度**：
 
-- 不用自己实现"按标签深度配对"（`sliceBalanced`/`splitTopLevel` 那套 142 行）
+- 不用自己实现“按标签深度配对”（`sliceBalanced`/`splitTopLevel` 那套 142 行）
 - 不用手工去噪（script 里的类名不会构成 DOM 节点）
 - 文本天然只取文本节点，不会把 `<strong>` 高亮处劈出空格
 

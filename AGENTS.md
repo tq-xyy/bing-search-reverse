@@ -1,14 +1,14 @@
 # bing-search-reverse
 
-用 **`fetch`（undici，ALPN 协商 h2）+ HTML SSR 直接抓 `cn.bing.com` 的搜索结果**，零浏览器依赖
-（不跑 CDP、不启 headless Chrome）的 Bing 搜索库。
+这是一个零浏览器依赖的 Bing 搜索库：用 **`fetch`（undici，ALPN 协商 h2）+ HTML SSR 直接抓
+`cn.bing.com` 的搜索结果**，不跑 CDP、不启 headless Chrome。
 
 ## 项目是什么
 
 | 项               | 内容                                                                                                                                                                                                                                                                                                                                           |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 对外入口         | `searchByBing(query, options?): Promise<SearchResult>`，见 [src/index.ts](src/index.ts)（门面：一个函数 + `SearchOptions` / `SearchResult` 两个 interface；契约类型在 [src/contract.ts](src/contract.ts)）。入口由 `options.bingEnterance`（`'cn'` / `'international'`）指定，缺省按运行时时区推测（中国大陆与港澳台 → 国内版，其余 → 国际版） |
-| 手测入口         | `npx tsx only_for_develop_fast_test.ts "查询词"` → 打印整个 `SearchResult`（8 行，唯一的手测脚本）                                                                                                                                                                                                                                             |
+| 手测入口         | `npx tsx only_for_develop_fast_test.ignored.ts "查询词"` → 打印整个 `SearchResult`（8 行）。脚本被 `.gitignore` 的 `*.ignored.ts` 排除，**不入库也不删除**，仅供本机手测                                                                                                                                                                       |
 | 双入口 A/B       | `npx tsx sandbox/ab.ts`（默认 20 题 × 2 入口；`--domains` / `--cases` 收窄）。结论：中文主题两边都行，英文原典主题（RFC / 官方文档 / 外国文学原文）国际版更优，token 省约 21%                                                                                                                                                                  |
 | 构建产物         | `dist/bing.js`（约 43KB）+ `dist/bing.d.ts`（约 12KB）；外部依赖 `htmlparser2` / `css-select` / `tough-cookie`，其余走全局 `fetch` / `node:crypto`                                                                                                                                                                                             |
 | 工具链           | Node 26（测试用内置 `node:test`）、TypeScript 7、`tsx`、rollup + esbuild                                                                                                                                                                                                                                                                       |
@@ -43,7 +43,7 @@ src/net/paa.ts   PAA 答案正文加载（附加能力）
 src/parse/       纯函数解析层（零 IO，无 layout 中间层）   src/utils/   UA / 时间 / URL / 去重
 ```
 
-研究沙盒（不是对外契约，本地私有不入库）：`sandbox/`——OpenAI SDK + DeepSeek API，
+研究沙盒（不是对外契约，本地私有，不入库）：`sandbox/`——OpenAI SDK + DeepSeek API，
 把 `searchByBing` 与 `downloadHTMLToMarkdown` 暴露成 LLM 的两个工具，
 用于反复调「工具返回什么形态」。默认 `deepseek-flash`，不限轮数、不限输出 token。
 `sandbox/ab.ts` 是双入口 A/B 驱动（题单在 `sandbox/ab-cases.ts`）。
@@ -56,11 +56,11 @@ src/parse/       纯函数解析层（零 IO，无 layout 中间层）   src/uti
 
 ## 终端工作流（重要）
 
-- **新会话第一个命令先执行**：`[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()`——治本中文乱码（pwsh7 默认 Console 编码是 gb2312，显示层把 UTF-8 字节按 GBK 显示；设置后 python 直接输出中文正常）
-- 长命令 / 多行逻辑：写成 `./*.ignored.sh`，用 sh/bash 执行，输出以 **UTF-8 格式** 重定向到 `*.ignored.txt`，再用读文本工具读取结果——终端反馈捕获层会丢多行命令的输出，脚本 + 文件方式可靠
+- **新会话第一个命令先执行**：`[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()`——从根上解决中文乱码（pwsh7 默认 Console 编码是 gb2312，显示层把 UTF-8 字节按 GBK 显示；设置后 python 输出中文正常）
+- 长命令 / 多行逻辑：写成 `./*.ignored.sh`，用 sh/bash 执行，输出以 **UTF-8 格式** 重定向到 `*.ignored.txt`，再用读文本工具读取结果——终端反馈捕获层会丢多行命令的输出，脚本 + 文件的方式更可靠
 - native 命令（git 等）中文经 `>` 重定向会乱码 → 用 `| Out-File -FilePath x -Encoding utf8`
-- 命令显示"无输出"时先怀疑捕获层而非执行失败：用文件状态（Test-Path / 读文件）交叉确认
-- 运行结束后把本次运行生成的临时脚本和重定向文本文件 (`.ignored.{sh, txt}`)，有价值的去掉 .ignored. 保留，无价值的删除。
+- 命令显示「无输出」时先怀疑捕获层而非执行失败：用文件状态（Test-Path / 读文件）交叉确认
+- 运行结束后处理本次生成的临时脚本和重定向文本文件（`.ignored.{sh, txt}`）：有价值的去掉 `.ignored.` 保留，无价值的删除。
 
 ## 🔴 第一原则：正向工程（照做），不要逆向验证
 
@@ -85,6 +85,8 @@ src/parse/       纯函数解析层（零 IO，无 layout 中间层）   src/uti
 > | 模块划分、数据流                                 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 > | 请求形态、cookie、rdr                            | [docs/PROTOCOL.md](docs/PROTOCOL.md)         |
 > | 页面结构、容器与选择器表                         | [docs/PARSING.md](docs/PARSING.md)           |
+> | 国内版 vs 国际版：机制、质量、默认哪个           | [docs/ENTRANCES.md](docs/ENTRANCES.md)       |
+> | 下游抓取的成本与失真（PDF 黑洞 / 上下文预算）    | [docs/FETCH-LIMITS.md](docs/FETCH-LIMITS.md) |
 > | 为什么不能那么改                                 | [docs/decisions/](docs/decisions/)           |
 > | 实验史（推翻清单 / 无影响清单）                  | [docs/HISTORY.md](docs/HISTORY.md)           |
 > | 测试怎么组织、怎么跑                             | [tests/](tests/) + 下方「验收」              |
@@ -92,7 +94,7 @@ src/parse/       纯函数解析层（零 IO，无 layout 中间层）   src/uti
 >
 > 拆分理由：原文件 7058 行 / 394KB，其中约 40% 是已作废的结论
 > （CDP、降级窗口、`status`/`fallbackQuery`），每次查阅都要把全部历史读一遍。
-> 按"是否影响你下次改代码"分层之后，改代码只需要读 ARCHITECTURE + PARSING。
+> 按「是否影响你下次改代码」分层之后，改代码只需要读 ARCHITECTURE + PARSING。
 
 ## 现行契约（速查）
 
@@ -115,14 +117,14 @@ SearchResult {
 }
 ```
 
-失败语义：网络/服务端故障重试耗尽后返回空 `pages`（不抛错）。
+（失败语义见上文「项目是什么」之后的同一段，不重复。）
 
-`correct` 只在 Bing 判定"打错字"时出现（实测 `Pyton socket` → `Python socket`），
+`correct` 只在 Bing 判定「打错字」时出现（实测 `Pyton socket` → `Python socket`），
 只有两个字段：`hint` 与 `correctedQuery`，**逐字搬运**，不给 URL。
 
 `hint` 是**两个 `.b_promtxt` 拼起来的整句**（Bing 分两段下发），必须一起给：
 「以下是 Python socket 的结果。改为搜索 Pyton socket?」——单给前段读起来像
-正常结果页的标题，**没有明示"搜错了"**，正是后段点破这件事。
+正常结果页的标题，**没有明示「搜错了」**，点破这件事的是后段。
 两段的文案是**灰度可变的**（同日见过「包含…/是否只需要…?」与「以下是…/改为搜索…?」），
 所以解析器只认结构不认字面。
 
@@ -132,7 +134,7 @@ SearchResult {
 时间字段（`WebPage.date` / `VideoPage.published` / `NewsPage.time`）
 **按精度截断**，不是精确时刻：`day`→`YYYY-MM-DD`、`hour`→`YYYY-MM-DD HH`、
 `minute`→`YYYY-MM-DD HH:mm`，精度见对应 `*Precision` 字段。
-Bing 的相对表述（"6 天之前"、"8 小时"）按注入的 `nowMs` 反推；
+Bing 的相对表述（「6 天之前」「8 小时」）按注入的 `nowMs` 反推；
 **不补 `00:00` 伪造时刻**（2026-10-18 修）。
 
 `date` 是 Bing 的**页面收录/更新日**，不是内容事件的发生时间，且相当一部分条目
@@ -147,8 +149,8 @@ Bing 的相对表述（"6 天之前"、"8 小时"）按注入的 `nowMs` 反推�
 2. `rdr=1` **必须以前置的普通请求为前提**，不能合并成一次请求。
    国际版的唯一开关是 URL 上的 `ensearch=1`（页面结构同构，会话握手不区分入口）。
 3. **第一遍响应的 `Set-Cookie` 必须合并进第二遍**（由 `Session.request` 自动做）。
-   漏掉会让富化模块整体消失而主结果照常，极易误判成"风控/CSR 改版"。
-4. 不要用"低降级率时段"的结论否定某条路径——那是无区分度基线。
+   漏掉会让富化模块整体消失而主结果照常，极易误判成「风控/CSR 改版」。
+4. 不要用「低降级率时段」的结论否定某条路径——那是无区分度基线。
 5. **归因要看唯一变量**：`--user-agent` 决定 CDP 通道能否拿到富化页，
    不是 `navigator.webdriver` 覆盖（2026-10-24 纠正，两变量同时存在时曾被归错）。
 6. **国际版的外链几乎全是 `ck/a` 跳转**（国内版约 0~10%）。解析器取链接一律走
@@ -187,7 +189,7 @@ sandbox/         LLM 工具沙盒：browser.ts + cdp-client.ts 是**唯一的浏
 3. **联网测试每个词只请求一次**（`tests/live/shared.ts` 的 Map 缓存），
    压测写成**单个 `it` 内并发**（`node --test` 默认串行跑用例，24 个 `it` 会慢 5 倍）。
 
-> `sec-ms-gec` 是**必需项**：无它时首遍 105KB 骨架，rdr 也不再可靠兜底。
+> `sec-ms-gec` 是**必需项**：无它时首遍只有 105KB 骨架，rdr 也不再可靠兜底。
 > 它由 `src/net/gec.ts` 的 `forgeGec()` **纯算法生成**（0.5ms，无浏览器、无网络、无缓存文件），
 > 是唯一来源，默认随每个请求注入。`sec-ms-gec-version` 的版本号取自
 > `resolveUaProfile().edgeVersion`，与 UA 里的 `Edg/` 段一致——

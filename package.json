@@ -6,7 +6,7 @@
     "scripts": {
         "build": "rollup -c",
         "prepare": "rollup -c",
-        "lint": "prettier -w \"src/**/*.ts\" \"tests/**/*.ts\" \"tools/**/*.ts\" \"docs/**/*.md\" AGENTS.md README.md README_en.md package.json .prettierrc.json rollup.config.mjs only_for_develop_fast_test.ts",
+        "lint": "prettier -w .",
         "typecheck": "tsc --noEmit",
         "test:offline": "tsx --test --test-concurrency=1 --test-reporter=spec \"tests/offline/**/*.test.ts\"",
         "test:live": "tsx --test --test-concurrency=1 --test-reporter=spec \"tests/live/**/*.test.ts\"",
