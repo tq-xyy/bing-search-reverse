@@ -212,14 +212,22 @@ sandbox/         LLM 工具沙盒：browser.ts + cdp-client.ts 是**唯一的浏
   `package.json` 的 `version` 在 registry 上**尚不存在**时才真正 `npm publish`。
   只改代码不改版本号 → 走「跳过发布」分支，发版动作不发生。
 - **发版三步**：改 `version`（`npm version patch|minor|major` 或手改）→ commit → `git push`。
-- **认证走 OIDC Trusted Publishing，仓库里不存任何 npm token**。但 npm **不支持为尚不存在的包预配置**
-  Trusted Publisher，所以首个版本必须先用 `npm publish --access public` 在本机手工发一次，之后才能在
+- **认证走 OIDC Trusted Publishing，仓库里不存任何 npm token**。有两个极易踩的坑：
+  ① `actions/setup-node` **不能写 `registry-url`**，写了它会生成带 `_authToken=${NODE_AUTH_TOKEN}` 的
+  `.npmrc` 并注入**空字符串**的 `NODE_AUTH_TOKEN`；② npm 11.x 判断「走 OIDC」的条件是
+  `process.env.NODE_AUTH_TOKEN === undefined`，**空串仍算 token 认证** → 报 ENEEDAUTH / 404，OIDC 不会被触发。
+  所以 workflow 里既要去掉 `registry-url`，publish 步骤还要 `unset NODE_AUTH_TOKEN` 兜底。
+- 但 npm **不支持为尚不存在的包预配置** Trusted Publisher，所以首个版本必须先用
+  `npm publish --access public` 在本机手工发一次，之后才能在
   `npmjs.com/package/bing-search-reverse/settings` 配 GitHub Actions 发布者（Organization/user = `tq-xyy`，
   Repository = `bing-search-reverse`，Workflow filename = 只填 `publish.yml`，不带路径）。
 - **workflow 文件名是认证的一部分**：重命名 / 移动 `publish.yml` 必须同步改 npm 后台，否则 OIDC 直接 403。
 - **发布门禁只跑 `pnpm typecheck` + `pnpm test:offline`，故意不跑 `test:live`**：
   live 用例打 `cn.bing.com`，GitHub runner 是海外出口，会变成随机红灯。要全跑就换成 `pnpm test`。
 - **`--provenance` 要求仓库公开**：仓库转私有就去掉这个参数，否则 publish 失败。
+- **本机 `~/.npmrc` 的 `registry` 指向 npmmirror 镜像**，镜像不可发布。所以
+  `package.json` 里固定了 `publishConfig.registry = https://registry.npmjs.org`，
+  手工发版不要只写 `npm publish`，否则会被推到镜像域名上。
 - 发布前想确认打进去什么：`npm pack --dry-run`（本地验证是 6 个文件 ≈ 22 kB，
   含 `dist/bing.js` / `dist/bing.d.ts` / 两个 README / LICENSE / package.json）。
 - CI 里用 `npm publish --ignore-scripts` 避免 `prepare` 重复 build；
