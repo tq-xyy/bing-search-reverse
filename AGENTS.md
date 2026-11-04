@@ -222,6 +222,13 @@ sandbox/         LLM 工具沙盒：browser.ts + cdp-client.ts 是**唯一的浏
   `npmjs.com/package/bing-search-reverse/settings` 配 GitHub Actions 发布者（Organization/user = `tq-xyy`，
   Repository = `bing-search-reverse`，Workflow filename = 只填 `publish.yml`，不带路径）。
 - **workflow 文件名是认证的一部分**：重命名 / 移动 `publish.yml` 必须同步改 npm 后台，否则 OIDC 直接 403。
+- **CI 报 `ENEEDAUTH` 的唯一含义**：OIDC 令牌换不到发布权限，即 trusted publisher 未配 /
+  文件名或仓库名对不上 / 包还没建。**打包成功不代表认证通过**——日志里 tarball 明细正常、
+  紧跟着 ENEEDAUTH，就是这一条。可用 `npx npm@latest trust list bing-search-reverse` 自检。
+- **配 trusted publisher 不必打开网页**：`www.npmjs.com` 只是前端，命令行走的是
+  `registry.npmjs.org` 的 API。用（本机 npm 10.x 没有 `trust` 子命令，必须经 `npx npm@latest`）：
+  `npx --yes npm@latest trust github bing-search-reverse --file publish.yml --repo tq-xyy/bing-search-reverse --allow-publish --registry https://registry.npmjs.org --otp=<6位码>`。
+  `--allow-publish` 不能省，否则只放行 `npm stage publish`。
 - **发布门禁只跑 `pnpm typecheck` + `pnpm test:offline`，故意不跑 `test:live`**：
   live 用例打 `cn.bing.com`，GitHub runner 是海外出口，会变成随机红灯。要全跑就换成 `pnpm test`。
 - **`--provenance` 要求仓库公开**：仓库转私有就去掉这个参数，否则 publish 失败。
