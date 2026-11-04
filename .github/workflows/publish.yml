@@ -26,10 +26,13 @@ jobs:
         with:
           version: 12
 
+      # 故意不写 registry-url：写了 setup-node 就会生成 .npmrc
+      # （_authToken=${NODE_AUTH_TOKEN}）并把 NODE_AUTH_TOKEN 设成空串。
+      # npm 11.x 判定「要走 OIDC」的条件是 process.env.NODE_AUTH_TOKEN === undefined，
+      # 空串仍算 token 认证 → 报 ENEEDAUTH / 404，OIDC 根本不会被触发。
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
           cache: pnpm
 
       # OIDC 发布要求 npm CLI >= 11.5.1；runner 自带的 npm 版本不保证够新。
@@ -49,7 +52,8 @@ jobs:
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+          if npm view "$NAME@$VERSION" version \
+               --registry https://registry.npmjs.org >/dev/null 2>&1; then
             echo "publish=false" >> "$GITHUB_OUTPUT"
             echo "::notice title=跳过发布::$NAME@$VERSION 已存在于 npm，本次不发版"
           else
@@ -80,9 +84,13 @@ jobs:
 
       # 不传任何 token：npm CLI 检测到 OIDC 环境后自动换短期令牌。
       # --ignore-scripts 是为了不让 prepare 再重复构建一次。
+      # unset 是保险：只要 NODE_AUTH_TOKEN 这个变量「存在」且为空，npm 就不走 OIDC。
       - name: Publish
         if: steps.v.outputs.publish == 'true'
-        run: npm publish --ignore-scripts --access public --provenance
+        run: |
+          unset NODE_AUTH_TOKEN
+          npm publish --ignore-scripts --access public --provenance \
+            --registry https://registry.npmjs.org
 
       # 想同时打 git tag + GitHub Release，把 contents 权限改成 write 并解注：
       # - name: Tag & release
