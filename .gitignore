@@ -1,0 +1,29 @@
+# 依赖（pnpm install 生成）
+node_modules/
+
+# 本地 API Key（勿提交）
+DS_APIKEY.txt
+.env
+.env.*
+
+# 诊断日志（含 Bing cookie，勿提交）
+bing-log.log
+*.log
+*.ignored.ts
+*.ignored.ps1
+*.ignored.sh
+*.ignored.txt
+*.ignored.py
+
+# 构建产物（pnpm build 生成；npm publish 靠 package.json 的 files 字段带上）
+dist/
+*.tsbuildinfo
+
+# 编辑器 / 系统
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+sandbox/

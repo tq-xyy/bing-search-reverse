@@ -1,0 +1,95 @@
+name: Publish to npm
+
+# 版本号驱动：main 上每次 push 都会跑，但只有 package.json 的 version
+# 在 npm 上还不存在时才真正发布。改别的代码不会发版。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 同一个提交只发一次：并发运行会把「先查版本」和「后发布」拆开。
+concurrency:
+  group: publish-npm-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read # provenance 需要读到仓库元信息
+  id-token: write # OIDC 换短期发布令牌的必需权限
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+
+      # OIDC 发布要求 npm CLI >= 11.5.1；runner 自带的 npm 版本不保证够新。
+      - name: Ensure npm >= 11.5.1
+        run: |
+          npm install -g npm@latest
+          npm --version
+
+      - name: Read version & check registry
+        id: v
+        run: |
+          read_field() {
+            node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).$1"
+          }
+          NAME=$(read_field name)
+          VERSION=$(read_field version)
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=跳过发布::$NAME@$VERSION 已存在于 npm，本次不发版"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=准备发布::$NAME@$VERSION"
+          fi
+
+      - name: Install
+        if: steps.v.outputs.publish == 'true'
+        run: pnpm install --frozen-lockfile
+
+      # 发布门禁：类型 + 离线用例。live 用例打 cn.bing.com，
+      # 在 GitHub runner（海外出口）上不稳定，默认不进发布链路；
+      # 想全跑就把它换成 `pnpm test`。
+      - name: Typecheck & offline tests
+        if: steps.v.outputs.publish == 'true'
+        run: |
+          pnpm typecheck
+          pnpm test:offline
+
+      - name: Build
+        if: steps.v.outputs.publish == 'true'
+        run: pnpm build
+
+      - name: Show tarball contents
+        if: steps.v.outputs.publish == 'true'
+        run: npm pack --dry-run
+
+      # 不传任何 token：npm CLI 检测到 OIDC 环境后自动换短期令牌。
+      # --ignore-scripts 是为了不让 prepare 再重复构建一次。
+      - name: Publish
+        if: steps.v.outputs.publish == 'true'
+        run: npm publish --ignore-scripts --access public --provenance
+
+      # 想同时打 git tag + GitHub Release，把 contents 权限改成 write 并解注：
+      # - name: Tag & release
+      #   if: steps.v.outputs.publish == 'true'
+      #   env:
+      #     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   run: |
+      #     git tag "v${{ steps.v.outputs.version }}"
+      #     git push origin "v${{ steps.v.outputs.version }}"
+      #     gh release create "v${{ steps.v.outputs.version }}" --generate-notes

@@ -1,0 +1,71 @@
+{
+  "query": "Ralph Wiggum loop",
+  "ms": 1676,
+  "count": 10,
+  "pages": [
+    {
+      "title": "AI 新概念：Ralph Loop 入门介绍与实践",
+      "url": "https://juejin.cn/post/7610478822882705450",
+      "snippet": "引言 如果你在 2025 年下半年关注过 AI 编程社区，你可能注意到一个奇特的名字不断出现： Ralph Loop （也称为 Ralph Wiggum，名 …",
+      "site": "稀土掘金"
+    },
+    {
+      "title": "claude-code/plugins/ralph-wiggum/README.md at main - GitHub",
+      "url": "https://github.com/anthropics/claude-code/blob/main/plugins/ralph-wiggum/README.md",
+      "snippet": "As Geoffrey Huntley describes it: \"Ralph is a Bash loop\" - a simple while true that repeatedly feeds an AI agent a prompt file, allowing …",
+      "site": "Github"
+    },
+    {
+      "title": "Ralph Loop | Claude by Anthropic",
+      "url": "https://claude.com/marketplace/plugins/ralph-loop",
+      "snippet": "Interactive AI loops for iterative development using the Ralph Wiggum technique: Claude works on tasks repeatedly, seeing prior …",
+      "site": "claude.com"
+    },
+    {
+      "title": "Ralph Wiggum – Autonomous Recursive Coding Loop",
+      "url": "https://ralphwiggum.org/",
+      "snippet": "Ralph Wiggum is an open-source agentic loop for AI-driven coding. Run recursive AI sessions with Claude/GPT and ship 100x faster.",
+      "site": "ralphwiggum.org"
+    },
+    {
+      "title": "简单就是美！Claude Code Ralph循环机制详解 - 知乎",
+      "url": "https://zhuanlan.zhihu.com/p/1997268040451110553",
+      "snippet": "过去一年，很多开发者尝试通过构建 复杂系统 来实现AI自主编程—— 多智能体协调器 、专职任务子智能体、繁琐的上下文传递……然 …",
+      "site": "知乎专栏"
+    },
+    {
+      "title": "Ralph Wiggum: Claude Code 的自主循环",
+      "url": "https://juejin.cn/post/7591406441203826722",
+      "date": "2026-01-05 00:00",
+      "snippet": "Claude Code 的官方插件市场中有一个引人注目的条目: ralph-wiggum。 它以《辛普森一家》中的角色命名,实现了自 …",
+      "site": "稀土掘金"
+    },
+    {
+      "title": "让 AI 为你无限迭代优化：Claude Code 之 Ralph Wiggum 绝 ...",
+      "url": "https://blog.csdn.net/u014333212/article/details/156721966",
+      "date": "2026-01-08 00:00",
+      "snippet": "文章浏览阅读1.5k次，点赞11次，收藏22次。本文介绍Claude Code的Ralph Wiggum插件，该工具支持AI在代码、文 …",
+      "site": "CSDN博客"
+    },
+    {
+      "title": "Claude Code实践5：Ralph Wiggum_npm安装ralphwiggum ...",
+      "url": "https://blog.csdn.net/m0_57280180/article/details/158802880",
+      "date": "2026-08-29 00:00",
+      "snippet": "Ralph Loop是一种AI自主编程技术，通过无限循环机制让Claude Code模型持续迭代完成任务。 其核心是while true …",
+      "site": "CSDN博客"
+    },
+    {
+      "title": "Ralph Wiggum - Viral Agentic Coding Loop, …",
+      "url": "https://ralph-wiggum.ai/",
+      "snippet": "What is Ralph Wiggum? Ralph Wiggum is a viral agentic coding loop that combines spec-driven …",
+      "site": "ralph-wiggum.ai"
+    },
+    {
+      "title": "GitHub - vercel-labs/ralph-loop-agent: Continuous Autonomy …",
+      "url": "https://github.com/vercel-labs/ralph-loop-agent",
+      "date": "2026-01-06 00:00",
+      "snippet": "What is the Ralph Wiggum Technique? The Ralph Wiggum technique is a development methodology built around …",
+      "site": "Github"
+    }
+  ]
+}

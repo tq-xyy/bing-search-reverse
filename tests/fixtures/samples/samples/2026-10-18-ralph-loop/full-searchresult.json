@@ -1,0 +1,157 @@
+{
+  "query": "Ralph 循环",
+  "ms": 1672,
+  "pages": [
+    {
+      "title": "Claude代码助手神器：Ralph Loop循环迭代完全指南",
+      "url": "https://zhuanlan.zhihu.com/p/1997375744154833801",
+      "date": "2026-01-21 00:00",
+      "snippet": "一、什么是Ralph Loop？ Ralph Loop是一种基于“永不放弃”理念的AI编程新技术，它能 …",
+      "site": "知乎专栏"
+    },
+    {
+      "title": "Claude Code 永动机：ralph-loop 无限循环迭代插件详解 ...",
+      "url": "https://blog.csdn.net/qq_44866828/article/details/156736656",
+      "date": "2026-06-29 00:00",
+      "snippet": "本文详解Claude Code插件ralph-loop的工作原理与最佳实践，重点介绍其通过completion-promise和Stop Hook实现 …",
+      "site": "CSDN博客"
+    },
+    {
+      "title": "简单就是美！Claude Code Ralph循环机制详解 - 知乎",
+      "url": "https://zhuanlan.zhihu.com/p/1997268040451110553",
+      "snippet": "过去一年，很多开发者尝试通过构建复杂系统来实现AI自主编程——多智能体协调器、专职任务子智能体、繁琐的上下文传递……然而 …",
+      "site": "知乎专栏"
+    },
+    {
+      "title": "AI 新概念：Ralph Loop 入门介绍与实践",
+      "url": "https://juejin.cn/post/7610478822882705450",
+      "snippet": "引言 如果你在 2025 年下半年关注过 AI 编程社区，你可能注意到一个奇特的名字不断出现： Ralph Loop （也称为 Ralph Wiggum，名 …",
+      "site": "稀土掘金"
+    },
+    {
+      "title": "Claude Code 持续迭代秘器：Ralph Loop 让 AI 坚持到任务 ...",
+      "url": "https://www.cnblogs.com/jeecg158/p/20915740",
+      "date": "2026-06-29 00:00",
+      "snippet": "这个问题有了一个解法，叫做 Ralph Loop。 Ralph Loop 是什么？ 从辛普森一家说起. Ralph Loop 是一个 Claude …",
+      "site": "博客园"
+    },
+    {
+      "title": "Ralph Wiggum 技巧：让 Claude Code 自主运行数小时",
+      "url": "https://juejin.cn/post/7591375103521210408",
+      "date": "2026-01-05 00:00",
+      "snippet": "Ralph Wiggum 插件是一个官方的 Anthropic Claude Code 插件，用于创建自主开发循环。 Claude 不会在单次尝试后 …",
+      "site": "稀土掘金"
+    },
+    {
+      "title": "Ralph Loop 深度解析：基于 Stop Hook 的自引用迭代开发 ...",
+      "url": "https://blog.csdn.net/roamingcode/article/details/156732443",
+      "date": "2026-01-08 00:00",
+      "snippet": "文章浏览阅读2.3k次，点赞27次，收藏16次。 本文深度分析 Claude Code 官方 Ralph Loop 插件的技术实现与设计哲 …",
+      "site": "CSDN博客"
+    },
+    {
+      "title": "Ralph：让 AI 自己写完整个需求的自主代理循环 | Agent 与 ...",
+      "url": "https://mistystar.cn/post/ralph-autonomous-ai-agent-loop",
+      "date": "2026-05-25 00:00",
+      "snippet": "Ralph 是一个自主 AI 代理循环，驱动 Claude Code 或 Amp 反复迭代运行，直到 PRD 中所有任务完成。 它用\"每次 …",
+      "site": "mistystar.cn"
+    },
+    {
+      "title": "Ralph Loop：自主循环开发",
+      "url": "https://colobu.com/2026/06/28/ralph-loop-autonomous-loop-development/",
+      "date": "2026-06-28 00:00",
+      "snippet": "它采用外部 Bash 脚本包装 Claude Code CLI 的架构，每次循环启动一个新的 Claude Code 进程。 它的核心贡献在 …",
+      "site": "鸟窝"
+    },
+    {
+      "title": "Ralph Loop 实战：用最笨的 AI 循环真正交付东西｜觉醒AI知识库",
+      "url": "https://www.jxxy.net/ai/articles/ralph-loops-dumb-ai-loops-ship/",
+      "date": "2026-08-31 00:00",
+      "snippet": "Cherrypick CTO Chris Parsons 在 AI Engineer 大会工作坊上完整拆解 Ralph Loop——从 while 循环、工单系统到自 …",
+      "site": "jxxy.net"
+    }
+  ],
+  "overview": {
+    "title": "Ralph 循环（Ralph Loop）是一种让 Claude Code 在同一任务上持续自动迭代，直到满足外部设定的完成条件（completion‑promise）或达到最大迭代次数的自动化循环机制，由 Geoffrey Huntley 于 2025 年提出，并已成为 Anthropic 官方插件。",
+    "paragraphs": [
+      "最早的 Ralph Loop 只是一个 Bash 循环：",
+      "✅ 适合：",
+      "❌ 不适合：",
+      "循环退出依赖字符串精确匹配，必须明确：",
+      "避免无限循环：",
+      "每轮只做一件事，便于调试。",
+      "如：测试、类型检查、linter。",
+      "这些案例共同点：任务定义清晰、完成标准明确。",
+      "Ralph 循环是一种让 AI 在外部验证驱动下持续迭代的工程化模式，通过文件系统持久化、Stop Hook 拦截和 completion‑promise 控制，使 Claude 能像“永不放弃的工程师”一样持续改进，直到任务真正完成。"
+    ],
+    "sources": [
+      {
+        "name": "掘金",
+        "url": "https://juejin.cn/post/7610478822882705450"
+      },
+      {
+        "name": "CSDN",
+        "url": "https://blog.csdn.net/qq_44866828/article/details/156736656"
+      },
+      {
+        "name": "",
+        "url": "https://zhuanlan.zhihu.com/p/1997268040451110553"
+      },
+      {
+        "name": "",
+        "url": "https://zhuanlan.zhihu.com/p/1997375744154833801"
+      }
+    ]
+  },
+  "relatedSearches": [
+    "ralph循环官网",
+    "ralph循环是什么",
+    "claude code 无限循环",
+    "ralph loop 怎么用",
+    "拉尔夫循环",
+    "ralph 怎么用",
+    "安装ralph",
+    "ralph loop 下载"
+  ],
+  "inlineVideos": [],
+  "images": {
+    "title": "Ralph 循环 的图片",
+    "url": "https://cn.bing.com/images/search?q=ralph+%e5%be%aa%e7%8e%af&qpvt=Ralph+%e5%be%aa%e7%8e%af&FORM=IGRE",
+    "moreUrl": "https://cn.bing.com/images/search?q=ralph+%e5%be%aa%e7%8e%af&qpvt=Ralph+%e5%be%aa%e7%8e%af&FORM=IQFRML",
+    "items": [
+      {
+        "thumbnailUrl": "https://ts1.tc.mm.bing.net/th/id/OIP-C.qh29STEa0s79pUeSTmAo8wHaFO?w=204&h=212&c=8&rs=1&qlt=90&o=6&pid=ImgAns&rm=2",
+        "title": "从 ReAct 到 Ralph Loop：AI Agent 的持续迭代范式_ralph-loop 如何控制到循环-CSDN博客",
+        "detailUrl": "https://cn.bing.com/images/search?view=detailV2&ccid=qh29STEa&id=101F6598FF728C8BFAE5A26624494B5C46467411&thid=OIP.qh29STEa0s79pUeSTmAo8wHaFO&mediaurl=https%3a%2f%2fi-blog.csdnimg.cn%2fimg_convert%2fcc01ae98606fec58178cec96f00dde89.png&exph=1410&expw=2000&q=Ralph+%e5%be%aa%e7%8e%af&mode=overlay&FORM=IQFRBA&ck=17EBC6C8B71F9171D182DE5079C51385&selectedIndex=0&idpp=serp",
+        "mediaUrl": "https://i-blog.csdnimg.cn/img_convert/cc01ae98606fec58178cec96f00dde89.png",
+        "width": 204,
+        "height": 212,
+        "originalWidth": 2000,
+        "originalHeight": 1410,
+        "id": "OIP.qh29STEa0s79pUeSTmAo8wHaFO"
+      },
+      {
+        "thumbnailUrl": "https://ts1.tc.mm.bing.net/th/id/OIP-C.Ib0Vw5k_dAAuUddEbixWlgHaEK?w=255&h=212&c=8&rs=1&qlt=90&o=6&pid=ImgAns&rm=2",
+        "title": "从Ralph Wiggum Loop到完全自主：智能体如何实现端到端驱动功能开发-CSDN博客",
+        "detailUrl": "https://cn.bing.com/images/search?view=detailV2&ccid=Ib0Vw5k%2f&id=99AB37AD821705FEACED0088A28CCF86F4D00157&thid=OIP.Ib0Vw5k_dAAuUddEbixWlgHaEK&mediaurl=https%3a%2f%2fi-blog.csdnimg.cn%2fdirect%2f3681a6c3ce0341f79fe37e3f738a5c8c.png&exph=720&expw=1280&q=Ralph+%e5%be%aa%e7%8e%af&mode=overlay&FORM=IQFRBA&ck=5F84AA7C0D57C406353AE77079747342&selectedIndex=0&idpp=serp",
+        "mediaUrl": "https://i-blog.csdnimg.cn/direct/3681a6c3ce0341f79fe37e3f738a5c8c.png",
+        "width": 255,
+        "height": 212,
+        "originalWidth": 1280,
+        "originalHeight": 720,
+        "id": "OIP.Ib0Vw5k_dAAuUddEbixWlgHaEK"
+      },
+      {
+        "thumbnailUrl": "https://ts1.tc.mm.bing.net/th/id/OIP-C.ocG5Fu_C_kik6WTpLan5_QHaGy?w=157&h=212&c=8&rs=1&qlt=90&o=6&pid=ImgAns&rm=2",
+        "title": "Ralph Wiggum 循环与 Stop Hook | 让 AI 完成全流程自动化迭代编程_拉尔夫循环-CSDN博客",
+        "detailUrl": "https://cn.bing.com/images/search?view=detailV2&ccid=ocG5Fu%2fC&id=5497830BD20E1704784E74B26B2990C601B1FDCB&thid=OIP.ocG5Fu_C_kik6WTpLan5_QHaGy&mediaurl=https%3a%2f%2fi-blog.csdnimg.cn%2fimg_convert%2fb9f9e12097916903aa9fd769af1c3ef4.png&exph=989&expw=1080&q=Ralph+%e5%be%aa%e7%8e%af&mode=overlay&FORM=IQFRBA&ck=7C6717E929D602293284BFE3C85DD31A&selectedIndex=0&idpp=serp",
+        "mediaUrl": "https://i-blog.csdnimg.cn/img_convert/b9f9e12097916903aa9fd769af1c3ef4.png",
+        "width": 157,
+        "height": 212,
+        "originalWidth": 1080,
+        "originalHeight": 989,
+        "id": "OIP.ocG5Fu_C_kik6WTpLan5_QHaGy"
+      }
+    ]
+  }
+}

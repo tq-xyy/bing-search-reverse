@@ -1,0 +1,75 @@
+{
+  "query": "Ralph 循环",
+  "ms": 1573,
+  "count": 10,
+  "pages": [
+    {
+      "title": "Claude代码助手神器：Ralph Loop循环迭代完全指南",
+      "url": "https://zhuanlan.zhihu.com/p/1997375744154833801",
+      "date": "2026-01-21 00:00",
+      "snippet": "一、什么是Ralph Loop？ Ralph Loop是一种基于“永不放弃”理念的AI编程新技术，它能 …",
+      "site": "知乎专栏"
+    },
+    {
+      "title": "Claude Code 永动机：ralph-loop 无限循环迭代插件详解 ...",
+      "url": "https://blog.csdn.net/qq_44866828/article/details/156736656",
+      "date": "2026-06-29 00:00",
+      "snippet": "本文详解Claude Code插件ralph-loop的工作原理与最佳实践，重点介绍其通过completion-promise和Stop Hook实现 …",
+      "site": "CSDN博客"
+    },
+    {
+      "title": "简单就是美！Claude Code Ralph循环机制详解 - 知乎",
+      "url": "https://zhuanlan.zhihu.com/p/1997268040451110553",
+      "snippet": "过去一年，很多开发者尝试通过构建复杂系统来实现AI自主编程——多智能体协调器、专职任务子智能体、繁琐的上下文传递……然而 …",
+      "site": "知乎专栏"
+    },
+    {
+      "title": "AI 新概念：Ralph Loop 入门介绍与实践",
+      "url": "https://juejin.cn/post/7610478822882705450",
+      "snippet": "引言 如果你在 2025 年下半年关注过 AI 编程社区，你可能注意到一个奇特的名字不断出现： Ralph Loop （也称为 Ralph Wiggum，名 …",
+      "site": "稀土掘金"
+    },
+    {
+      "title": "Claude Code 持续迭代秘器：Ralph Loop 让 AI 坚持到任务 ...",
+      "url": "https://www.cnblogs.com/jeecg158/p/20915740",
+      "date": "2026-06-29 00:00",
+      "snippet": "这个问题有了一个解法，叫做 Ralph Loop。 Ralph Loop 是什么？ 从辛普森一家说起. Ralph Loop 是一个 Claude …",
+      "site": "博客园"
+    },
+    {
+      "title": "Ralph：让 AI 自己写完整个需求的自主代理循环 | Agent 与 ...",
+      "url": "https://mistystar.cn/post/ralph-autonomous-ai-agent-loop",
+      "date": "2026-05-25 00:00",
+      "snippet": "Ralph 是一个自主 AI 代理循环，驱动 Claude Code 或 Amp 反复迭代运行，直到 PRD 中所有任务完成。 它用\"每次 …",
+      "site": "mistystar.cn"
+    },
+    {
+      "title": "Ralph AI自主编程循环范式 - CSDN博客",
+      "url": "https://blog.csdn.net/u012045365/article/details/157353374",
+      "date": "2026-02-06 00:00",
+      "snippet": "Ralph（全称 Ralph Wiggum）是 Geoffrey Huntley 于2025年5月提出的 AI自主编程循环范式，后发展为开源CLI工 …",
+      "site": "CSDN博客"
+    },
+    {
+      "title": "第4章：Ralph Loop —— 自主循环开发 —— 《AI时代的软件 ...",
+      "url": "https://se.rpcx.io/04.html",
+      "date": "2026-09-26 00:00",
+      "snippet": "4.2.4 会话内循环 vs 外部进程循环 ralph-wiggum 的\"会话内循环\"设计与 frankbria 的\"外部进程循环\"代表了 Ralph …",
+      "site": "rpcx.io"
+    },
+    {
+      "title": "Ralph Loop | goose AI 智能体",
+      "url": "https://goose.ac.cn/goose/docs/tutorials/ralph-loop/",
+      "date": "2026-03-25 00:00",
+      "snippet": "Ralph Loop 基于 Geoffrey Huntley 的 Ralph Wiggum 技术，是一种迭代开发模式，它能让 goose 不断工作，直到任 …",
+      "site": "goose.ac.cn"
+    },
+    {
+      "title": "Agent 循环控制原理解析：Stop Hook 与 Ralph Loop | betaHi ...",
+      "url": "https://betahi.github.io/posts/stop-hook-and-ralph-loop/",
+      "date": "2026-04-19 00:00",
+      "snippet": "Ralph Loop 来自 snarktank/ralph 仓库的一种工程模式：让 agent 在”生成 → 外部验证 → 反馈 → 再生成”的循环里迭 …",
+      "site": "betahi.github.io"
+    }
+  ]
+}

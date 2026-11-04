@@ -1,0 +1,74 @@
+{
+    "name": "bing-search-reverse",
+    "version": "1.0.0",
+    "description": "用 HTTP/2 + HTML SSR 直接抓 cn.bing.com 的搜索结果，零浏览器依赖",
+    "main": "dist/bing.js",
+    "scripts": {
+        "build": "rollup -c",
+        "prepare": "rollup -c",
+        "lint": "prettier -w \"src/**/*.ts\" \"tests/**/*.ts\" \"tools/**/*.ts\" \"docs/**/*.md\" AGENTS.md README.md README_en.md package.json .prettierrc.json rollup.config.mjs only_for_develop_fast_test.ts",
+        "typecheck": "tsc --noEmit",
+        "test:offline": "tsx --test --test-concurrency=1 --test-reporter=spec \"tests/offline/**/*.test.ts\"",
+        "test:live": "tsx --test --test-concurrency=1 --test-reporter=spec \"tests/live/**/*.test.ts\"",
+        "test": "pnpm typecheck && pnpm test:offline && pnpm test:live"
+    },
+    "keywords": [
+        "bing",
+        "search",
+        "scraper",
+        "http2",
+        "serp",
+        "ai-overview",
+        "server-side-rendering",
+        "no-browser",
+        "reverse-engineering"
+    ],
+    "author": {
+        "name": "tq-xyy",
+        "url": "https://github.com/tq-xyy",
+        "email": "m17097231932@163.com"
+    },
+    "license": "MIT",
+    "type": "module",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/tq-xyy/bing-search-reverse.git"
+    },
+    "homepage": "https://github.com/tq-xyy/bing-search-reverse#readme",
+    "bugs": {
+        "url": "https://github.com/tq-xyy/bing-search-reverse/issues"
+    },
+    "engines": {
+        "node": ">=20.19"
+    },
+    "dependencies": {
+        "css-select": "^7.0.0",
+        "htmlparser2": "^12.0.0",
+        "tough-cookie": "^6.0.2"
+    },
+    "devDependencies": {
+        "@types/node": "^26.2.0",
+        "@typescript/typescript6": "^6.0.2",
+        "domhandler": "^6.0.1",
+        "esbuild": "^0.28.1",
+        "prettier": "^3.9.6",
+        "rollup": "^4.64.7",
+        "rollup-plugin-dts": "^6.5.1",
+        "rollup-plugin-esbuild": "^6.2.1",
+        "tsx": "^4.23.11",
+        "typescript": "^7.0.2"
+    },
+    "types": "./dist/bing.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/bing.d.ts",
+            "import": "./dist/bing.js",
+            "default": "./dist/bing.js"
+        }
+    },
+    "files": [
+        "dist",
+        "README_en.md"
+    ],
+    "sideEffects": false
+}
