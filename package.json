@@ -1,6 +1,6 @@
 {
     "name": "bing-search-reverse",
-    "version": "1.0.1",
+    "version": "2.0.0",
     "description": "用 HTTP/2 + HTML SSR 直接抓 cn.bing.com 的搜索结果，零浏览器依赖",
     "main": "dist/bing.js",
     "scripts": {
