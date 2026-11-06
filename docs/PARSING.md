@@ -1,50 +1,8 @@
 # 页面解析
 
-## 策略：用 DOM，不用正则
-
-正则**没有计数器**，做不到“按标签深度配对”。实测最小复现：
-
-```html
-<li class="b_ans">
-    <ul>
-        <li>内层1</li>
-        <li>内层2</li>
-    </ul>
-    <p>正文</p>
-</li>
-```
-
-`/<li class="b_ans"[\s\S]*?<\/li>/` 会在第一个内层 `</li>` 处截断，正文全丢。
-
-真实页面上这已经造成过静默丢数据：`b_ans` 内含 24 个嵌套 li、
-`mc_vtvc` 嵌套 10 层 div、`b_pag` 内含嵌套 li。
-
-现在用 `htmlparser2` + `css-select`：
-
-```ts
-const doc = parseDocument(html) // 一次
-selectAll('li.b_algo', doc) // 任意次
-```
-
-**整页只 parse 一次，6 个模块共用**——`parseSearchPage` 是唯一入口，
-先 `parseDocument` 建一棵 DOM，再按容器分给各提取器，不重复扫全文。
-
-### DOM 顺带解决的三类问题
-
-| 问题                     | 正则方案                             | DOM 方案          |
-| ------------------------ | ------------------------------------ | ----------------- |
-| 嵌套标签配对             | 需自己实现深度计数（142 行）         | 选择器天然处理    |
-| script 里的类名字面量    | 需手工去噪                           | 不会构成 DOM 节点 |
-| 标题里的 `<strong>` 高亮 | `replace(/<[^>]+>/g,' ')` 会劈出空格 | 只取文本节点      |
-
-第三条实测曾影响 **42/49 条标题**：
-
-```
-正则: 洛天依 （中国内地女虚拟歌手）_百度百科
-应该是: 洛天依（中国内地女虚拟歌手）_百度百科
-```
-
 ## 文本化：块级元素补空格，行内元素不补
+
+解析走 `htmlparser2` + `css-select`：正则没有计数器，做不到按标签深度配对；剥标签还会在标题的 `<strong>` 高亮处劈出空格——49 条标题里有 42 条踩到。
 
 **唯一的文本化入口**（`text()`）与 `DomUtils.textContent` 的差别只有一条：
 
@@ -67,9 +25,7 @@ Bing 的时间有三种写法，页面上**没有**机器可读的绝对时间�
 
 **唯一的时间解析函数**（`parseDateTime()`）返回 `{ value, precision }`：
 
-- **值按精度截断**：day→10 位、hour→13 位、minute→16 位。旧实现一律补 `00:00`，
-  把「只知道是哪天」包装成「知道是零点」，下游拿去做时间线和去重会被污染
-  （2026-10-18 实测：两个不同视频的 published 都是 `2026-08-19 06:50`）
+- **值按精度截断**：day→10 位、hour→13 位、minute→16 位。
 - 字符串仍是**前缀可比**的：字典序 == 时间序，排序不需要解析成 Date
 - 月按 30 天、年按 365 天近似；误差上限是一个精度单位（day 精度 ±1 天）
 - 认不出的（“昨天”、“刚刚”、“3 days ago”）返回 `undefined`，**不猜**
@@ -78,6 +34,13 @@ Bing 的时间有三种写法，页面上**没有**机器可读的绝对时间�
   时间取最后一个 `·` 之后
 
 对外的 `date` / `published` / `time` 都带同名的 `*Precision` 字段，**不保留相对原文**。
+
+**语义边界**：`date` 是 Bing 的页面收录/更新日，不是内容所指事件的发生时间；
+**很多条目本来就没有该字段**（缺失 = Bing 没给）。所以它只能做排序参考，
+不足以当过滤判据——把「没有 date」当成「不满足时间条件」是错的。
+
+**明确不做**：不派生 `host` 字段（`new URL(url).hostname` 永远正确，重复信息）；
+不做时间过滤、不做可信度打分。
 
 ## 来源：以 url 为准
 
@@ -89,8 +52,7 @@ Bing 的时间有三种写法，页面上**没有**机器可读的绝对时间�
 
 ## 容器枚举与分流
 
-顶层不再让每个模块各自 `selectAll` 全页，而是先枚举结果流容器，再按
-class 分流。字段级选择器仍留在各提取器内。
+顶层先枚举结果流容器，再按 class 分流。字段级选择器仍留在各提取器内。
 
 ```
 items = #b_results > li  +  .b_results_eml > li        （文档顺序）
@@ -142,12 +104,6 @@ for (const item of items) {
   混排，隐藏容器在前时就会先命中它——所以用 `['#brsv3','#inline_rs']`
   逐个 `all` 再拼接。
 
-> **没有「未知容器哨兵」了。** 2026-10-24 删除：它要求每个提取器导出
-> marker 常量、由 `layout.ts` 汇总，而生产侧从不读取该结果，只为测试断言存在；
-> 且 `WEB_PAGE_SELECTOR` 含 `h2 a`、`.b_caption` 这类过宽特征，恒不触发。
-> 同一批保护改由「离线样本必须解析出结果」承担（`tests/offline/samples.test.ts`
-> 与 `parsers.test.ts` 的 20 个样本），断言的是**真实产出**而不是常量表的自洽性。
-
 新增卡片类型要做什么：在 `parse/index.ts` 的循环里加分支，并补一个离线样本。
 
 ### pages 生成规则
@@ -158,7 +114,7 @@ for (const item of items) {
 - 内嵌视频不单独成条，放 `WebPage.video`
 - 图片卡不进入 pages，保持顶层 `images`
 
-## 文档型主结果（`type:'pdf'`，2026-10-27）
+## 文档型主结果（`type:'pdf'`）
 
 Bing 会给一部分主结果打文件类型标记——样本里只有 `[PDF]`：
 
@@ -195,7 +151,7 @@ wpt 网格与结果流都会把同一个块喂进来，拆成「先问类型再�
 出口裁剪里的图标剥离函数就是一例（漏了会让 PDF 的 favicon 逃过裁剪）；
 `tests/offline/parsers.test.ts` 有一条用例专门盯这个。
 
-## 新增组件与字段来源（2026-10-18）
+## 新增组件与字段来源
 
 | 字段                     | 来源                                                                         | 说明                                                                |
 | ------------------------ | ---------------------------------------------------------------------------- | ------------------------------------------------------------------- |
@@ -207,34 +163,12 @@ wpt 网格与结果流都会把同一个块喂进来，拆成「先问类型再�
 | `NewsPage.logo`          | `img.pubimg[data-src-hq]`                                                    | 相对 `/th?...` 补 `https://www.bing.com`                            |
 | `OverviewSource.favicon` | `img.md_citlink__fav-img[data-src]` / `.gs_cit .rms_iac[data-src]`           | 来源图标                                                            |
 | `RelatedQuestion`        | `#df_listaa .acf-accn-itm`                                                   | 问题 + 来源 URL（`.b_paa_ansContainer[data-url]`）                  |
-| `RelatedQuestion.answer` | `POST /getanswerforclickedquestion` 的 `.paa-txt`                            | 异步加载，见下节                                                    |
-
-## PAA 答案正文加载（2026-10-18 实测）
-
-服务端只给问题与空的答案容器；答案正文由前端点击后异步请求：
-
-```
-POST /getanswerforclickedquestion?IG=<IG>&IID=RelatedQnA-QnAAlsoAsk&SFX=<n>
-content-type: application/x-www-form-urlencoded
-body = JSON.stringify({ Question, Feed, Language, Url })
-```
-
-- `IG` 来自搜索页 HTML（`IG:"<32hex>"`，与 rdr 用的是同一个）。
-- 接口 URL = 站点基址 + `/getanswerforclickedquestion` + `?IG=<32hex>&IID=RelatedQnA-QnAAlsoAsk&SFX=<n>`，
-  IG 取自搜索页 HTML 内联的 `IG:"<32hex>"`。
-- `Feed`/`Language` 从页面 `AnswerFetcher(...)` 脚本提取，缺省
-  `urlpostwebzhchs` / `zh_chs`。
-- 响应 HTML：答案 `.paa-txt`；引用 `.paa-cit-card`（`.paa-cit-txt` /
-  `.paa-cit-attr-text` / `.paa-cit-url` / `.paa-cit-logo img`）。
-- 加载是**附加能力**：默认开启（`SearchOptions.loadRelatedAnswers`），
-  并发 3、6s 超时；失败/超时只缺 `answer`，不影响问题列表与主结果。
-- 不直抓 `data-url` 来源页：百科对直抓返回 403，应走 Bing 自己的接口。
+| `RelatedQuestion.answer` | `POST /getanswerforclickedquestion` 的 `.paa-txt`                            | 异步加载，见 [PROTOCOL.md](PROTOCOL.md) 的「PAA 答案接口」          |
 
 ## 深链接/扩展链接的限制
 
-用户可能在浏览器里看到 `li.b_algo.b_vtl_deeplinks.qbrs`，但当前服务端响应
-（含 CDP 渲染后的 VCP 页面）并不稳定下发该节点。解析层只做“存在则解析”：
-缺省即没有，不承诺覆盖率（2026-10-18 观测）。
+用户可能在浏览器里看到 `li.b_algo.b_vtl_deeplinks.qbrs`，但服务端响应并不稳定下发该节点。
+解析层只做“存在则解析”：未下发即没有，不承诺覆盖率。
 
 ## 字段选择器表
 
@@ -250,7 +184,7 @@ body = JSON.stringify({ Question, Feed, Language, Url })
 | 标题/链接 | `h2 a`                    | href 可能是 `/ck/a` 重定向，需解码                          |
 | 摘要      | `p[class*="b_lineclamp"]` | 数字变体 2/3/4 都认                                         |
 | 站点名    | `.tptt`                   | 是**注册域**（zhihu.com），不是完整主机名                   |
-| 文档标记  | `.sb_doct_txt`            | 文本 `[PDF]` → `type:'pdf'`；见下节                         |
+| 文档标记  | `.sb_doct_txt`            | 文本 `[PDF]` → `type:'pdf'`；见上文                         |
 
 ### 相关搜索
 
@@ -310,7 +244,7 @@ body = JSON.stringify({ Question, Feed, Language, Url })
 只支持 cht 型时，gs 型答案卡会被整体判为“没有 overview”。
 
 cht 型正文是 **Markdown 渲染结果**，`paragraphs` 直接还原成 Markdown 片段
-（2026-10-18 修复，见 [HISTORY.md](HISTORY.md) §4.4）：
+：
 
 | 原 DOM           | 输出                                                       |
 | ---------------- | ---------------------------------------------------------- |
@@ -323,32 +257,18 @@ cht 型正文是 **Markdown 渲染结果**，`paragraphs` 直接还原成 Markdo
 - 只取 `p` 会把「✅ 适合：」这类引导句留下、紧跟的列表内容整段丢掉。
 - 以冒号结尾的引导句与**紧邻**的列表/代码块放在同一段（换行分隔）；
   中间隔着 `h2/h3/hr` 不合并。
-- 首个 `h2` 是 `title`，不再重复输出成 `##`。
+- 首个 `h2` 是 `title`，不重复输出成 `##`。
 - 代码块只取 `code.md_codblk`，不带「Code / 复制」工具栏。
-- 引用链接子树（`.md_citlink`）不参与正文。旧实现就地把 `a.children = []` 清空，
-  同一批链接稍后还要取来源站名 → `sources[].name` 被连带清空（知乎来源名为空的根因）。
-
-## 实体解码
+- 引用链接子树（`.md_citlink`）不参与正文——同一批链接稍后还要取来源站名，不能就地清空。
 
 用 htmlparser2 的 `decodeEntities`（默认开），**不需要 `entities` 包**。
-
-实测差异——`entities` 会把这些原样返回，htmlparser2 能正确解码：
-
-| 实体       | entities | htmlparser2 |
-| ---------- | -------- | ----------- |
-| `&nbsp;`   | 字面量   | 空格        |
-| `&ensp;`   | 字面量   | EN SPACE    |
-| `&hellip;` | 字面量   | …           |
-| `&middot;` | 字面量   | ·           |
-
-例外：`&#0183;` 是**八进制**字符引用（= “·”），两者都正确处理。
-但如果手工喂未解码的原始片段给 `extractDatePrefix`，它内部会做一次归一化
-（见 `normalizeDateSeparators`）。
+例外：`&#0183;` 是**八进制**字符引用（= “·”）；手工把未解码的原始片段喂给
+`extractDatePrefix` 时，它内部会做一次归一化（见 `normalizeDateSeparators`）。
 
 ## 覆盖率
 
 这些数字来自 `tests/fixtures/samples/cards`（5 份）、`cards2`（3 份）与
-`cards3`（2026-10-18 抓取的 9 份），**不是保证**：
+`cards3`（9 份），**不是保证**：
 
 | 模块     | 覆盖率（cards/cards2） | 说明                                      |
 | -------- | ---------------------- | ----------------------------------------- |
@@ -371,7 +291,7 @@ cards3 补充的组件覆盖（9 份样本）：
 | 深链接 `links`       | 3/9  | VCP / 北京天气 / 美元人民币汇率                 |
 | 资讯展开             | 2/9  | 决策模型 / 父母欠薪…（各 5 条）                 |
 
-cards4（2026-10-24 抓取，4 份）专测**「我们不解析的卡片」的兼容性**：
+cards4（4 份）专测**「我们不解析的卡片」的兼容性**：
 
 | 样本               | 首屏顶部卡片                          | 卡片内部                                   | 结果                                               |
 | ------------------ | ------------------------------------- | ------------------------------------------ | -------------------------------------------------- |
@@ -382,10 +302,8 @@ cards4（2026-10-24 抓取，4 份）专测**「我们不解析的卡片」的�
 
 ### 为什么“不解析”也要测
 
-词条卡与汇率卡都**没有 `h2 a`、没有 `.tptt`**，它们靠 `common-module-*` /
-`fin_*` 那套 DOM 渲染。这让 `extractWebDigest` 天然收不到它们——但这只是
-“当前选择器恰好不匹配”，不是设计约束。加上断言把这条性质锁住：
-**新卡片类型出现时，主结果集不能多一条也不能少一条。**
+词条卡与汇率卡都**没有 `h2 a`、没有 `.tptt`**，靠 `common-module-*` / `fin_*` 那套 DOM
+渲染，`extractWebDigest` 因此收不到它们。断言锁住这条性质：**新卡片类型出现时，主结果集不能多一条也不能少一条。**
 
 ### 纠错提示（`SearchResult.correct`）
 
@@ -402,7 +320,7 @@ cards4（2026-10-24 抓取，4 份）专测**「我们不解析的卡片」的�
 **两段必须一起给**。只给前段（“以下是 X 的结果。”）读起来像正常结果页的标题，
 **没有明示“你搜错了”**——正是后段的“改为搜索 …?”点破这件事。
 
-文案是**灰度可变的**，2026-10-24 当天同一查询先后见过两套：
+文案是**灰度可变的**，同一查询先后见过两套：
 
 | `.sp_requery`     | `.sp_recourse`       |
 | ----------------- | -------------------- |
@@ -421,7 +339,7 @@ cards4（2026-10-24 抓取，4 份）专测**「我们不解析的卡片」的�
 域名与参数形态。**不导出链接本身**：`.sp_recourse` 的 href 带 Bing 内部编码
 （`filters=rcrse:"1"`），不是该暴露的形态。
 
-正常查询没有这个块，字段缺省；缺链接文本（无从告诉调用方该搜什么）也不算纠错。
+正常查询没有这个块，字段不存在；缺链接文本（无从告诉调用方该搜什么）也不算纠错。
 
 ### wpt（杂志式首屏）网格里的主结果
 

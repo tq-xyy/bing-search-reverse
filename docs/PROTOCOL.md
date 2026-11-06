@@ -27,13 +27,15 @@ https://cn.bing.com/search
 
 三个词（经济应用数学基础 / Kubernetes Pod 调度 原理 / 民族团结法）全部复现。
 
-⚠️ 注意：**结果条目本身仍然正确**（首条都对），丢掉的只有 AI Overview、
-相关搜索、富化模块与响应体积。所以“结果看起来是对的”不能作为没踩坑的证据。
+⚠️ **结果条目本身仍然正确**（首条都对），所以「结果看起来是对的」不能作为没踩坑的证据。
 
-## 国际版入口（2026-10-27 逆向）
+浏览器首次导航的 URL 里没有 `first`，所以有 AI Overview。本库也不做翻页：
+`first` 只出现在翻页请求里，而翻页不在对外契约内。
 
-CN Bing 的搜索页右上角有「国内版 / 国际版」两个 div（#est_cn / #est_en）。
-用 CDP 真实鼠标事件观察，点「国际版」发出的导航是：
+## 国际版入口
+
+CN Bing 搜索页右上角有「国内版 / 国际版」两个 div（#est_cn / #est_en）。
+点「国际版」发出的导航是：
 
     GET https://cn.bing.com/search?q=<q>&FORM=BESBTB&rdr=1&rdrig=<IG>&ensearch=1
 
@@ -45,21 +47,20 @@ CN Bing 的搜索页右上角有「国内版 / 国际版」两个 div（#est_cn 
 - **页面结构完全同构**：li.b_algo / li.b_ans / #df_listaa / .b_paa_ansContainer
   与国内版逐一对应，解析器不需要分支。
 - **rdr 不是必需**：直接 /search?q=…&ensearch=1 首遍即为填充页
-  （8 个查询 320–532KB）。模块仍保留「首遍骨架 → rdr 兜底」的既有序列，
+  （8 个查询 320–532KB）。模块的序列仍是「首遍骨架 → rdr 兜底」，
   第二遍自动带着 ensearch=1。
 - **PAA 的 Feed/Language 随查询语言变化**：中文查询 urlpostwebzhchs / zh_chs，
   英文查询 urlpostweben / en。加载层本来就从页面 AnswerFetcher 提取，无需改。
 - **外链形态不同**：国际版单页 40–66 处外链包着 /ck/a 跳转（国内版约 0~10%）。
   解析器**只有一个取链接出口**，统一做「ck/a 还原 + 相对补全」，
   包括解出的站内相对路径（/images/search?…）——这是国际版必须做的修复。
-  细节与违规写法见 [ENTRANCES.md](ENTRANCES.md) §1.2。
 
 会话握手**不区分入口**：继续用 getSession()（cn.bing.com/ 首页），
 因为浏览器里点「国际版」也是从国内首页进去的。
 
 入口选择：`searchByBing` 的 `bingEnterance` 参数（`cn` / `international`）。
 不传时按运行时时区推测：中国大陆与港澳台时区 → `cn`，其余 → `international`。
-这个推测只是缺省值，数据上并不成立——见 [ENTRANCES.md](ENTRANCES.md) §四。
+这个推测只是默认值，数据上并不成立——见 [ENTRANCES.md](ENTRANCES.md) 的「该用哪个：判据」。
 
 ## 请求头
 
@@ -86,7 +87,7 @@ User-Agent: <Edge 形态，Chrome/Edg 同主版本，版本池 131/135/138/145/1
 | gec + `2-999.0.0.0`（版本号不校验） | 413KB 填充         |
 | 30 分钟前的 gec                     | 103KB 骨架         |
 
-#### ✅ 已实现纯算法生成（2026-10-18 逆向完成）
+#### 纯算法生成
 
 算法（`forgeGec()`，纯函数、0.5ms、无浏览器无网络）：
 
@@ -108,9 +109,8 @@ gec     = part1 + "-" + part2
 
 #### ⚠️ 无 gec 时不能指望 rdr 兜底
 
-2026-10-18 深夜复测：无 gec 的三组查询第一遍 105–108KB 骨架，**rdr 第二遍也只回到
-106–109KB**（早前记录的「12/12 补救」已不成立）。所以 gec 现在是**必需项**，
-不是「省一次往返的优化项」。
+无 gec 时首遍 105–108KB 骨架，**rdr 第二遍也只回到 106–109KB**。
+所以 gec 是**必需项**，不是「省一次往返的优化项」。
 
 #### ⚠️ 只对 Edge UA 生效
 
@@ -126,7 +126,7 @@ gec     = part1 + "-" + part2
 1. Bing 不能不给 Chrome 活路，所以「骨架页 + 客户端补渲染」是 Chrome 的通用回退路线；
    GEC 是 Edge 用户的捷径。
 2. **我们也不能对 Chrome UA 发这个头**：现实中不存在这种组合，发出去反而是异常特征。
-   这条不变量现在由**类型**保证而不是运行时判断：`gecHeaders(edgeVersion)` 只收
+   这条不变量由**类型**保证，不是运行时判断：`gecHeaders(edgeVersion)` 只收
    版本号、没有 UA 参数；而 `resolveUaProfile()` 的唯一产物就是 Edge UA。
 
 UA 主版本**不校验**（131~160 都能首遍填充），所以 `ua.ts` 的随机版本池没有风险。
@@ -138,30 +138,28 @@ const { ua, edgeVersion } = resolveUaProfile() // utils/ua.ts，单例
 gecHeaders(edgeVersion) // → { sec-ms-gec, sec-ms-gec-version: '2-' + edgeVersion }
 ```
 
-不再有采集器、缓存文件或环境变量覆盖。同一 300s 窗口内结果恒定（进程内缓存，
-缓存键含版本）。`sec-ms-gec-version` **跟随 UA 里的 `Edg/` 版本**，不再钉死
-`2-155.0.4283.45`——真实 Edge 的网络栈携带的是自己正在运行的版本，
-固定 155 会与 UA（如 `Edg/152`）拼出现实中不存在的组合。
+同一 300s 窗口内结果恒定（进程内缓存，缓存键含版本）。`sec-ms-gec-version`
+**跟随 UA 里的 `Edg/` 版本**：真实 Edge 的网络栈携带的是自己正在运行的版本，
+钉死 `2-155.0.4283.45` 会与 UA（如 `Edg/152`）拼出现实中不存在的组合。
 
-> 2026-10-24 实测：主版本池 131/135/138/145/152/155/160 逐版本配自身版本号，
-> 全部首遍填充（383–393KB，含 `b_ans`）。Bing 本身不校验版本一致性
-> （`2-999.0.0.0` 也填充），此处「跟随」纯粹为了形态自洽，代价为零。
+主版本池 131/135/138/145/152/155/160 逐版本配自身版本号，全部首遍填充
+（383–393KB，含 `b_ans`）。Bing 本身不校验版本一致性（`2-999.0.0.0` 也填充），
+「跟随」纯粹为了形态自洽，代价为零。
 
 跳过第二遍：首遍 ≥ 200KB 即视为填充页（骨架 100–110KB / 填充 350–480KB）。
 带 `sec-ms-gec` 时首遍几乎总是填充页（实测 8/8 查询 343–477KB），因此第二遍
 默认不执行，只作为首遍退化成骨架页时的兜底。
 
-> 2026-10-24：`BING_NO_RDR` / `BING_FORCE_RDR` / `BING_UA` 三个环境变量已删除。
-> 前两个关的都是「默认已经不走的路径」；`BING_UA` 更危险——它会换掉 UA 进而
-> 让 `sec-ms-gec-version` 与 UA 版本脱节，把「版本错配」误归因成「Chrome UA 降级」。
-> 库现在没有任何环境变量开关，行为完全由 `searchByBing(query, options)` 决定。
+库没有任何环境变量开关，行为完全由 `searchByBing(query, options)` 决定。
+这条是刻意的：能换 UA 的开关会让 `sec-ms-gec-version` 与 UA 版本脱节，
+把「版本错配」误归因成「Chrome UA 降级」。
 
 ### UA 不是反爬变量
 
 实测 Edge 与 Chrome UA 完全等效。真正决定“填充页 vs 骨架页”的是 **cookie 完整度**。
 
-历史上曾把“Edge UA 导致降级”当作结论——那是错的：那次对照里 Edge 组恰好用了
-精简 cookie，把 cookie 的问题误记到了 UA 头上。
+归因时要看唯一变量：那次对照里 Edge 组恰好用了精简 cookie，把 cookie 的问题
+误记到了 UA 头上。
 
 ## cookie
 
@@ -172,7 +170,7 @@ gecHeaders(edgeVersion) // → { sec-ms-gec, sec-ms-gec-version: '2-' + edgeVers
 页面 JS 在用户首次交互时把 `SRCHHPGUSR=HV=<时间戳秒>&HVE=<Salt>` 写进 cookie。
 我们直接构造，跳过交互。`Salt` 的值就在首页 HTML 里（`Salt:"..."`）。
 
-逐字段删除实验的结论：从浏览器完整 cookie（22 项）逐项删，
+逐字段删除的结论：从浏览器完整 cookie（22 项）逐项删，
 **只有删 `SRCHHPGUSR` 会从 438KB 崩到 101KB**；再对 `SRCHHPGUSR` 内部 18 字段逐个删，
 **只有 `HVE` 是致命项**。
 
@@ -218,7 +216,7 @@ rdr 不是独立开关，它依赖“本会话刚发生过一次普通搜索”�
 第一遍普通请求的响应会**重新下发 6 条 cookie**，其中 `SRCHHPGUSR` 是服务端生成的
 HV/HVE 形态。第二遍 `rdr=1` 只有带上这份新 cookie 才会返回填充页。
 
-实测（2026-10-18，`Kubernetes Pod 调度 原理`）：
+实测（`Kubernetes Pod 调度 原理`）：
 
 | 第二遍带的 cookie     | 体积        | brsv3 | b_ans |
 | --------------------- | ----------- | ----- | ----- |
@@ -226,20 +224,33 @@ HV/HVE 形态。第二遍 `rdr=1` 只有带上这份新 cookie 才会返回填�
 | 合并第一遍 Set-Cookie | **358,876** | ✓     | 65    |
 
 浏览器会自动做这件事（cookie jar）；本库的 `Session` 用 `tough-cookie` 的 `CookieJar`
-做同样的事（早期手写 http2 层曾**把 Set-Cookie 全丢了**），
-所以在服务端开始下发新 `SRCHHPGUSR` 之后，富化模块整体消失（overview/related/videos/images 全空），
-主结果却仍正常 —— 这会被误判成“CSR 改版”或“风控”。
+做同样的事。漏掉第一遍的 `Set-Cookie` 会让富化模块整体消失
+（overview/related/videos/images 全空）而主结果照常，
+会被误判成“CSR 改版”或“风控”（`Session.request` 自动做）。
 
 ### `rdrig` 的取值无关紧要
 
 实测真值 / 首页值 / 伪造 / 跨会话 / 完全不带，均能拿到填充页。
 用首页 `IG` 只是因为最方便、形态最自然，且不依赖首遍响应。
-（现在优先用首遍响应里的 `IG`，退回首页值。）
+（优先用首遍响应里的 `IG`，退回首页值。）
+
+### `form=QBLH` 是另一个前提
+
+缺 form 时 rdr 被拒 → 骨架页。所以上面 URL 模板里的 `form=QBLH` 不是装饰。
 
 ### ⚠️ 不要用“低降级率时段”的结论否定它
 
-历史上曾因在低骨架率时段测到“关闭 rdr 也 72/72 正常”而误判其冗余并删除，
-随后在骨架高发期立刻回归。**无区分度基线上的对照没有任何证明力。**
+关闭 rdr 在低骨架率时段能测出“72/72 正常”，在骨架高发期立刻回归；
+两遍合并成一遍的改动，若在「仍含两段逻辑的副本」上测，也能测出 100% 填充。
+**无区分度基线上的对照没有任何证明力。**
+
+### ⚠️ 也不要把体积与 `b_algo` 计数当降级判据
+
+骨架页的结果标题**同样精准匹配完整查询**，与填充页没有质量差异；二者只差模块丰富度。
+所以本库不做降级检测：`status` / `fallbackQuery` / `verdict` / `degraded` / `garbage`
+都不存在，对外只有一句话——**`pages` 就是 Bing 的返回**。
+「降级窗口秒级开合」的表象实际是概率漂移（约 10%~100% 缓慢变化），
+「现在降级了吗」根本没有稳定答案，下游自己判断相关性比库替它判断更准。
 
 ## 骨架页 vs 填充页
 
@@ -250,10 +261,7 @@ HV/HVE 形态。第二遍 `rdr=1` 只有带上这份新 cookie 才会返回填�
 | AI Overview         | 无                 | 有     |
 | 相关搜索 / 富化卡片 | 无                 | 有     |
 
-⚠️ **体积与 `b_algo` 计数都不能作为降级判据**——骨架页的结果条目本身是对的，
-差异只在富化模块。本库不做降级检测（`status`/`fallbackQuery` 已在 2026-10-18 退役）。
-
-## PAA 答案接口（2026-10-18 实测）
+## PAA 答案接口
 
 “其他用户还问了以下问题”的问题与来源 URL 在服务端 HTML 里；答案正文是
 用户点击后由前端异步请求的。实现分两半：**请求**（POST 到 `/getanswerforclickedquestion`）与
@@ -277,7 +285,7 @@ body = JSON.stringify({
 - `IG` 来自搜索页 HTML（`IG:"<32hex>"`），与 rdr 的 `rdrig` 同源。
 - `Feed`/`Language` 从页面内联脚本
   `new GetAnswerForClickedQuestion.AnswerFetcher("/getanswerforclickedquestion?...", "urlpostwebzhchs", "zh_chs", ...)`
-  提取；缺省值就是这两个。
+  提取；默认值就是这两个。
 - `SFX` 是前端自增计数，从 1 开始；实测每条独立请求都可用。
 - 必须带搜索页的 cookie 与 `referer`（cookie 由 `Session.request` 自动管理）。
 

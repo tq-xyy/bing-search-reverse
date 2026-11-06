@@ -310,6 +310,11 @@ Relative wording on Bing ("6 days ago") is resolved to absolute time, but no ins
 
 - **No pagination**: adding `first` makes Bing treat the request as a page turn and skip the AI
   Overview and all enrichment modules.
+- **No result judging or credibility scoring**: `pages` is exactly what Bing returned; the library
+  does not label results as degraded or spam.
+- **No time filtering**: `date` is Bing's crawl/update date, not when the event happened; it is only
+  a sorting hint.
+- **No derived `host` field**: the source is whatever hostname the `url` carries.
 - AI Overview coverage is roughly 8%~33%, depending on the query.
 
 ## Development

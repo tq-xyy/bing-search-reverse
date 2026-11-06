@@ -45,7 +45,7 @@ function searchByBing(
 interface SearchOptions {
     /**
      * 入口：'cn' 国内版 / 'international' 国际版。
-     * 缺省按运行时的时区推测：中国大陆与港澳台 → 'cn'，其余 → 'international'。
+     * 默认按运行时的时区推测：中国大陆与港澳台 → 'cn'，其余 → 'international'。
      */
     bingEnterance?: 'cn' | 'international'
     /** 是否加载 PAA 答案正文（默认 true）。关掉能省一轮请求。 */
@@ -302,6 +302,9 @@ Bing 的相对表述（“6 天之前”）会根据本地时间反推成绝对�
 ### 已知边界
 
 - **不支持翻页**：URL 带 `first` 会让 Bing 判定为翻页请求，跳过 AI Overview 与全部富化模块。
+- **不做结果裁决与可信度打分**：`pages` 就是 Bing 的返回，不额外判定「降级 / 垃圾」。
+- **不做时间过滤**：`date` 是收录/更新日，不是事件发生时间，只能排序参考。
+- **不派生 `host` 字段**：来源以 `url` 的 hostname 为准。
 - AI Overview 覆盖率约 8%~33%，具体取决于查询内容。
 
 ## 开发
