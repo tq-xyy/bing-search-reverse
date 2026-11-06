@@ -1,10 +1,15 @@
 /** Bing 时间文本 → 带精度的本地时间（按精度截断，不伪造时刻）。 */
 
-/** 时间精度：输出值能信到哪一级。 */
+/**
+ * 时间精度：输出值能信到哪一级。
+ *
+ * 只在本层内部用于决定截断位置，**不对外暴露**——对外统一成 `publishedAt`，
+ * 精度由字符串长度自证（10 / 13 / 16 位）。
+ */
 export type DatePrecision = 'minute' | 'hour' | 'day'
 
 export interface ParsedDateTime {
-    /** day→10 位、hour→13 位、minute→16 位 */
+    /** day→10 位、hour→13 位、minute→16 位，日期与时刻用 `T` 分隔 */
     value: string
     precision: DatePrecision
 }
@@ -43,7 +48,7 @@ function toLocalDateTime(ms: number): string {
         pad2(d.getMonth() + 1) +
         '-' +
         pad2(d.getDate()) +
-        ' ' +
+        'T' +
         pad2(d.getHours()) +
         ':' +
         pad2(d.getMinutes())

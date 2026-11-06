@@ -1,37 +1,59 @@
 import { all, one, text, attr, hasClass, type Element } from './dom.ts'
-import { resolveBingUrl } from './urls.ts'
-import { parseDateTime, type DatePrecision } from '../utils/time.ts'
+import { absoluteAssetUrl, resolveBingUrl } from './urls.ts'
+import { parseDateTime } from '../utils/time.ts'
 
 /** 视频答案卡容器 class。 */
 export const VIDEO_CARD_CLASS = 'b_vidAns'
 
+/** 视频条目共有的字段（不含 type 与素材）。 */
 interface VideoMeta {
+    duration?: string
+    site?: string
+    uploader?: string
+    views?: string
+    /** 发布时刻，按可信精度截断（10 / 13 / 16 位，`T` 分隔）。 */
+    publishedAt?: string
+}
+
+/** 视频素材；默认不下发，需 includeRichContents。 */
+export interface VideoRichContents {
+    favicon?: string
+    thumbnail?: string
+}
+
+/**
+ * 视频卡里的一条视频。
+ *
+ * 卡片本身不单独暴露：卡头标题恒为 `<查询词> 的视频`，「更多视频」链接
+ * 也只是 `/videos/search?q=<查询词>`，都能从 query 推出来。
+ */
+export interface VideoPage extends VideoMeta {
+    type: 'video'
+    title: string
+    url: string
+    snippet?: string
+    richContents?: VideoRichContents
+}
+
+/**
+ * 主结果里内嵌的视频富摘要，作为 `WebPage.richContents.video` 附加。
+ *
+ * 该 DOM 不提供简介与发布时间，所以不声明这两个字段（声明了也永远是空承诺）。
+ */
+export interface InlineVideo {
+    url: string
     thumbnail?: string
     duration?: string
     site?: string
     uploader?: string
     views?: string
-    published?: string
-    publishedPrecision?: DatePrecision
-    description?: string
 }
 
-/** 视频卡展开后的一条视频。 */
-export interface VideoPage extends VideoMeta {
-    type: 'video'
-    source: 'card'
+type VideoData = VideoMeta & {
     title: string
     url: string
-    card: { title: string; moreUrl?: string }
+    thumbnail?: string
 }
-
-/** 主结果里内嵌的视频富摘要，作为 WebPage.video 附加。 */
-export interface InlineVideo extends VideoMeta {
-    source: 'inline'
-    url?: string
-}
-
-type VideoData = VideoMeta & { title: string; url: string }
 
 /** aria-label 兜底表：字段 → 「标签 + 值 + ·」。 */
 const ARIA_FIELDS = [
@@ -40,15 +62,6 @@ const ARIA_FIELDS = [
     ['site', /来源:\s*([^·]+?)\s*·/],
     ['uploader', /上传人:\s*([^·]+?)\s*·/],
 ] as const
-
-function assignDate(
-    target: VideoMeta,
-    parsed: ReturnType<typeof parseDateTime>
-): void {
-    if (!parsed) return
-    target.published = parsed.value
-    target.publishedPrecision = parsed.precision
-}
 
 /** 解析 div.mc_vtvc；视频卡与内嵌视频共用。 */
 function parseVtvc(block: Element, nowMs: number): VideoData | undefined {
@@ -80,54 +93,50 @@ function parseVtvc(block: Element, nowMs: number): VideoData | undefined {
     const views = text(one('.meta_vc_content', block))
     if (views) item.views = views
 
-    assignDate(
-        item,
-        parseDateTime(text(one('.meta_pd_content', block)), nowMs)
-    )
+    const parsed = parseDateTime(text(one('.meta_pd_content', block)), nowMs)
+    if (parsed) item.publishedAt = parsed.value
 
     for (const [field, re] of ARIA_FIELDS) {
         if (item[field]) continue
         const m = re.exec(aria)
         if (m) item[field] = m[1].trim()
     }
-    if (!item.published) {
+    if (!item.publishedAt) {
         const m = /上传时间:\s*([^·]+?)\s*·/.exec(aria)
-        if (m) assignDate(item, parseDateTime(m[1], nowMs))
+        const fallback = m ? parseDateTime(m[1], nowMs) : undefined
+        if (fallback) item.publishedAt = fallback.value
     }
 
-    const desc = /单击以播放。?\s*·\s*([\s\S]+)$/.exec(aria)
-    if (desc) {
-        const d = desc[1].replace(/\s+/g, ' ').trim()
-        if (d) item.description = d
-    }
     return item
+}
+
+/** 视频条目上的站点图标；当前样本不下发，有则填。 */
+function faviconOf(container: Element): string | undefined {
+    const el = one(
+        '.cico.siteicon .rms_iac[data-src], .wr_fav .rms_iac[data-src]',
+        container
+    )
+    return absoluteAssetUrl(el ? (attr(el, 'data-src') ?? '') : '')
 }
 
 /** 视频卡 → 多条 VideoPage。必须锁定卡容器，否则会把内嵌视频混进来。 */
 export function extractVideoPages(card: Element, nowMs: number): VideoPage[] {
-    let title = ''
-    let moreUrl: string | undefined
-    for (const bt of all('.btitle', card)) {
-        const a = one('a', bt)
-        if (!a) continue
-        if (!moreUrl) {
-            const href = attr(a, 'href')
-            if (href) moreUrl = resolveBingUrl(href) || undefined
-        }
-        const t = text(a)
-        if (!title && t && !/^更多视频/.test(t)) title = t
-    }
-
     const out: VideoPage[] = []
     for (const block of all('.mc_vtvc', card)) {
         const v = parseVtvc(block, nowMs)
         if (!v) continue
-        out.push({
-            type: 'video',
-            source: 'card',
-            ...v,
-            card: { title, moreUrl },
-        })
+
+        const { title, url, thumbnail, ...meta } = v
+        const item: VideoPage = { type: 'video', title, url, ...meta }
+
+        const richContents: VideoRichContents = {}
+        if (thumbnail) richContents.thumbnail = thumbnail
+        const favicon = faviconOf(block)
+        if (favicon) richContents.favicon = favicon
+        if (Object.keys(richContents).length > 0)
+            item.richContents = richContents
+
+        out.push(item)
     }
     return out
 }
@@ -155,12 +164,11 @@ export function extractInlineVideo(
         if (view) views = '查看次数 ' + view[1].trim()
     }
 
-    const { title: _title, url, ...meta } = v
-    return {
-        source: 'inline',
-        url,
-        ...meta,
-        uploader,
-        views,
-    }
+    const inline: InlineVideo = { url: v.url }
+    if (v.thumbnail) inline.thumbnail = v.thumbnail
+    if (v.duration) inline.duration = v.duration
+    if (v.site) inline.site = v.site
+    if (uploader ?? v.uploader) inline.uploader = uploader ?? v.uploader
+    if (views ?? v.views) inline.views = views ?? v.views
+    return inline
 }

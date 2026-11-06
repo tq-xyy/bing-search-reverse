@@ -25,7 +25,9 @@ Bing 的时间有三种写法，页面上**没有**机器可读的绝对时间�
 
 **唯一的时间解析函数**（`parseDateTime()`）返回 `{ value, precision }`：
 
-- **值按精度截断**：day→10 位、hour→13 位、minute→16 位。
+- **值按精度截断**：day→10 位、hour→13 位、minute→16 位；日期与时钟之间用大写
+  `T` 分隔（`2026-10-17T04`）。不用空格：`T` 形态是合法的 ISO 8601 前缀，
+  补上 `:00` 就能直接喂 `new Date()`。
 - 字符串仍是**前缀可比**的：字典序 == 时间序，排序不需要解析成 Date
 - 月按 30 天、年按 365 天近似；误差上限是一个精度单位（day 精度 ±1 天）
 - 认不出的（“昨天”、“刚刚”、“3 days ago”）返回 `undefined`，**不猜**
@@ -33,11 +35,14 @@ Bing 的时间有三种写法，页面上**没有**机器可读的绝对时间�
   （见 `extractDatePrefix`）；资讯卡 footer 形如 `凤凰网科技 · 10 小时`，
   时间取最后一个 `·` 之后
 
-对外的 `date` / `published` / `time` 都带同名的 `*Precision` 字段，**不保留相对原文**。
+对外的四型结果统一用 `publishedAt`，**不保留相对原文，也不带 `*Precision` 字段**——
+可信到哪一级由字符串长度自证（10 位 day / 13 位 hour / 16 位 minute），
+与 `trimByPrecision` 的截断口径一一对应。精度存两遍会出现自相矛盾
+（`{ value: '2026-10-05', precision: 'minute' }` 类型合法但语义非法），故只留一份。
 
-**语义边界**：`date` 是 Bing 的页面收录/更新日，不是内容所指事件的发生时间；
+**语义边界**：网页结果的 `publishedAt` 是 Bing 的页面收录/更新日，不是内容所指事件的发生时间；
 **很多条目本来就没有该字段**（缺失 = Bing 没给）。所以它只能做排序参考，
-不足以当过滤判据——把「没有 date」当成「不满足时间条件」是错的。
+不足以当过滤判据——把「没有 publishedAt」当成「不满足时间条件」是错的。
 
 **明确不做**：不派生 `host` 字段（`new URL(url).hostname` 永远正确，重复信息）；
 不做时间过滤、不做可信度打分。
@@ -82,15 +87,15 @@ for (const item of items) {
 }
 ```
 
-| 容器                                         | 分流目标                                                                |
-| -------------------------------------------- | ----------------------------------------------------------------------- |
-| class 含 `b_algo`                            | `WebPage` 或 `PdfPage`（主结果；含 favicon/sideImage/rich/links/video） |
-| class 含 `b_vidAns`                          | 视频卡 → 每条展开为 `VideoPage`                                         |
-| 容器内 `a.nscjk_card_link` / `a.nscard_link` | 资讯 → 每条展开为 `NewsPage`                                            |
-| 容器内 `#df_listaa`                          | PAA → 顶层 `relatedQuestions`                                           |
-| 容器内 `.cht_text` / `.gs_text`              | 顶层 `overview`（cht 优先，gs 次之）                                    |
-| `#brsv3` / `#inline_rs`                      | 顶层 `relatedSearches`（brsv3 优先）                                    |
-| class 含 `b_imgansacf`                       | 顶层 `images`（聚合，不进入 pages）                                     |
+| 容器                                         | 分流目标                                                |
+| -------------------------------------------- | ------------------------------------------------------- |
+| class 含 `b_algo`                            | `WebPage` 或 `PdfPage`（主结果；素材在 `richContents`） |
+| class 含 `b_vidAns`                          | 视频卡 → 每条展开为 `VideoPage`                         |
+| 容器内 `a.nscjk_card_link` / `a.nscard_link` | 资讯 → 每条展开为 `NewsPage`                            |
+| 容器内 `#df_listaa`                          | PAA → 顶层 `relatedQuestions`                           |
+| 容器内 `.cht_text` / `.gs_text`              | 顶层 `overview`（cht 优先，gs 次之）                    |
+| `#brsv3` / `#inline_rs`                      | 顶层 `relatedSearches`（brsv3 优先）                    |
+| class 含 `b_imgansacf`                       | 顶层 `images`（聚合，不进入 pages）                     |
 
 关键点：
 
@@ -109,9 +114,11 @@ for (const item of items) {
 ### pages 生成规则
 
 - `li.b_algo` → 1 条 `WebPage`（type:'page'）；**带 `.sb_doct_txt` 标记的则是 `PdfPage`（type:'pdf'）**
-- `li.b_vidAns` → 卡内每个视频 1 条 `VideoPage`（type:'video'，`source:'card'`）
+- `li.b_vidAns` → 卡内每个视频 1 条 `VideoPage`（type:'video'）；**卡头本身不输出**。
+  卡头那两个链接（`<查询词> 的视频` 与「更多视频」）都只是
+  `/videos/search?q=<查询词>` 的两种写法，能从 query 推出来，故不进契约
 - 资讯 → 每条 1 条 `NewsPage`（type:'news'）
-- 内嵌视频不单独成条，放 `WebPage.video`
+- 内嵌视频不单独成条，放 `WebPage.richContents.video`
 - 图片卡不进入 pages，保持顶层 `images`
 
 ## 文档型主结果（`type:'pdf'`）
@@ -147,23 +154,27 @@ Bing 会给一部分主结果打文件类型标记——样本里只有 `[PDF]`�
 判别和字段提取在**同一次**遍历里完成（`extractWebDigest` 返回 `{ docType, fields }`）：
 wpt 网格与结果流都会把同一个块喂进来，拆成「先问类型再取字段」会白跑两遍 DOM 查询。
 
-`type` 是下游分叉的依据，所以任何**按 type 分派**的地方都必须显式带上 `pdf`——
-出口裁剪里的图标剥离函数就是一例（漏了会让 PDF 的 favicon 逃过裁剪）；
-`tests/offline/parsers.test.ts` 有一条用例专门盯这个。
+`type` 是下游分叉的依据。出口裁剪**不按 type 分派**：它统一删掉每条结果的
+`richContents`，PDF 与网页走同一条路径，不存在"漏了 pdf 就逃过裁剪"的可能。
+`tests/offline/parsers.test.ts` 有一条用例专门盯 PDF 的素材也被裁掉。
 
 ## 新增组件与字段来源
 
-| 字段                     | 来源                                                                         | 说明                                                                |
-| ------------------------ | ---------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `WebPage.favicon`        | `li.b_algo .cico.siteicon .rms_iac[data-src]`（退 `.wr_fav`、`img.res_img`） | Bing ODF URL，原样输出；离线样本 80/80 覆盖                         |
-| `WebPage.sideImage`      | `li.b_algo > .b_imgcap_altitle > .b_imgcap_img`                              | 图文并排的缩略图；`detailUrl` 是点击目标（Bing 图片详情页或来源页） |
-| `WebPage.rich`           | `.b_rcGbMod`（hero + 卡片）/ `.b_richcard`（tabs + b_vList）                 | 单条结果的展开；两形态统一为 sections                               |
-| `WebPage.links`          | `.b_vtl_deeplinks a` / `.b_vlist2col.b_deep a`                               | 深链接/扩展链接；当前样本时有时无，存在才填                         |
-| `WebPage.video`          | `.rc_videocap`                                                               | 内嵌视频富摘要，不拆条                                              |
-| `NewsPage.logo`          | `img.pubimg[data-src-hq]`                                                    | 相对 `/th?...` 补 `https://www.bing.com`                            |
-| `OverviewSource.favicon` | `img.md_citlink__fav-img[data-src]` / `.gs_cit .rms_iac[data-src]`           | 来源图标                                                            |
-| `RelatedQuestion`        | `#df_listaa .acf-accn-itm`                                                   | 问题 + 来源 URL（`.b_paa_ansContainer[data-url]`）                  |
-| `RelatedQuestion.answer` | `POST /getanswerforclickedquestion` 的 `.paa-txt`                            | 异步加载，见 [PROTOCOL.md](PROTOCOL.md) 的「PAA 答案接口」          |
+| 字段                               | 来源                                                                         | 说明                                                                |
+| ---------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `WebPage.richContents.favicon`     | `li.b_algo .cico.siteicon .rms_iac[data-src]`（退 `.wr_fav`、`img.res_img`） | Bing ODF URL，原样输出；离线样本 80/80 覆盖                         |
+| `WebPage.richContents.sideImage`   | `li.b_algo > .b_imgcap_altitle > .b_imgcap_img`                              | 图文并排的缩略图；`detailUrl` 是点击目标（Bing 图片详情页或来源页） |
+| `WebPage.richContents.rich`        | `.b_rcGbMod`（hero + 卡片）/ `.b_richcard`（tabs + b_vList）                 | 单条结果的展开；两形态统一为 sections                               |
+| `WebPage.richContents.links`       | `.b_vtl_deeplinks a` / `.b_vlist2col.b_deep a`                               | 深链接/扩展链接；当前样本时有时无，存在才填                         |
+| `WebPage.richContents.video`       | `.rc_videocap`                                                               | 内嵌视频富摘要，不拆条                                              |
+| `NewsPage.richContents.favicon`    | `img.pubimg[data-src-hq]`                                                    | 相对 `/th?...` 补 `https://www.bing.com`                            |
+| `NewsPage.richContents.thumbnail`  | `.imagewrap img.itm_img[data-src-hq]`                                        | 右侧配图；只有 `nscjk` 变体下发，`nscard` 变体没有                  |
+| `VideoPage.richContents.thumbnail` | `.mc_vtvc_th .cico .rms_iac[data-src]`                                       | 视频封面                                                            |
+| `VideoPage.richContents.favicon`   | `.cico.siteicon .rms_iac[data-src]`（退 `.wr_fav`）                          | 当前样本不下发，有则填；不编造选择器                                |
+| `Overview.citations[].favicon`     | `img.md_citlink__fav-img[data-src]` / `.gs_cit .rms_iac[data-src]`           | 来源图标                                                            |
+| `Overview.citations[].title`       | 无                                                                           | 引用链接里只有图标与站点名，没有页标题；**留空不猜**                |
+| `SearchResult.relatedQuestions[]`  | `#df_listaa .acf-accn-itm`                                                   | 问题 + 来源 URL（`.b_paa_ansContainer[data-url]`）                  |
+| `…relatedQuestions[].answer`       | `POST /getanswerforclickedquestion` 的 `.paa-txt`                            | 异步加载，见 [PROTOCOL.md](PROTOCOL.md) 的「PAA 答案接口」          |
 
 ## 深链接/扩展链接的限制
 
@@ -197,17 +208,19 @@ wpt 网格与结果流都会把同一个块喂进来，拆成「先问类型再�
 
 ### 视频
 
-| 目标        | 选择器                           | 备注                                            |
-| ----------- | -------------------------------- | ----------------------------------------------- |
-| 卡片        | `li.b_vidAns`                    | 必须先锁定它，再取 `.mc_vtvc`                   |
-| 条目        | `.mc_vtvc`                       | 卡尾 `<template>` 里也有同名元素，需排除        |
-| 链接/aria   | `a.mc_vtvc_link`                 | aria-label 是超长拼接串，只作兜底               |
-| 标题        | `.mc_vtvc_title` 的 `title` 属性 | 比取文本干净                                    |
-| 时长        | `.mc_bc.items`                   | “5:31” / “2:40:13”                              |
-| 站点/上传者 | `.mc_vtvc_meta_channel span`     | 第 2 个带 `mc_vtvc_meta_row_channel`            |
-| 播放量      | `.meta_vc_content`               | —                                               |
-| 发布时间    | `.meta_pd_content`               | —                                               |
-| 内嵌视频    | `li.b_algo .rc_videocap`         | 标题取 b_algo 的 h2；作者/播放量在 `.b_factrow` |
+| 目标        | 选择器                           | 备注                                             |
+| ----------- | -------------------------------- | ------------------------------------------------ |
+| 卡片        | `li.b_vidAns`                    | 必须先锁定它，再取 `.mc_vtvc`                    |
+| 条目        | `.mc_vtvc`                       | 卡尾 `<template>` 里也有同名元素，需排除         |
+| 链接/aria   | `a.mc_vtvc_link`                 | aria-label 是超长拼接串，只作兜底                |
+| 标题        | `.mc_vtvc_title` 的 `title` 属性 | 比取文本干净                                     |
+| 时长        | `.mc_bc.items`                   | “5:31” / “2:40:13”                               |
+| 站点/上传者 | `.mc_vtvc_meta_channel span`     | 第 2 个带 `mc_vtvc_meta_row_channel`             |
+| 播放量      | `.meta_vc_content`               | —                                                |
+| 发布时间    | `.meta_pd_content`               | —                                                |
+| 内嵌视频    | `li.b_algo .rc_videocap`         | 标题取 b_algo 的 h2；作者/播放量在 `.b_factrow`  |
+| 封面        | `.mc_vtvc_th .cico .rms_iac`     | `data-src`；进 `richContents.thumbnail`          |
+| 卡头        | `.btitle`                        | **不输出**：标题与「更多视频」都只是查询词的函数 |
 
 ### 资讯
 
@@ -219,6 +232,9 @@ wpt 网格与结果流都会把同一个块喂进来，拆成「先问类型再�
 | 独立资讯块 | `nscard_link`     | `.nscard_caption`                  | `.news_footer` |
 
 来源取 `<cite>` 的 `title` 属性——cite 里嵌了 base64 占位图，不能取文本。
+
+两张变体的配图位置也不同：`nscjk` 在标题右侧的 `.imagewrap img.itm_img[data-src-hq]`，
+`nscard` 没有配图。**两者都进 `richContents.thumbnail`**，不参与 `snippet`。
 
 ### 图片
 

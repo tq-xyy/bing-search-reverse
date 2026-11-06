@@ -9,7 +9,17 @@
  * （pdf = Bing 打了 `[PDF]` 标记的文档型主结果）；
  * overview / relatedQuestions / relatedSearches 在顶层；images 也在顶层。
  *
- * 每个 query 只请求一次（before 里预热），避免重复打 Bing 触发风控；
+ * 每个 query 在 before 里预热两次（默认选项 / 三个开关全开），之后所有断言
+ * 都读缓存，不再打 Bing。两次取法缺一不可：
+ *   · 默认选项 —— 验证「该裁的都裁掉了」，也验证默认形态；
+ *   · 三个开关全开 —— 验证被裁掉的素材确实**能**被拿到。只测默认的话，
+ *     video / images / richContents 三条断言永远拿不到样本，只会恒 skip，
+ *     那是把「跳过」当「通过」的假绿。
+ *
+ * ⚠️ 两份结果**不逐条比对**：它们是两次独立请求，Bing 的排位灰度实验会让
+ * 同词在相邻请求间换序（见 request-shape.test.ts 文件头）。跨请求只断言
+ * 各自内部自洽的东西。
+ *
  * 卡片缺失时以 skip 呈现，而不是「测试列表随响应变化」。
  */
 import assert from 'node:assert/strict'
@@ -19,6 +29,8 @@ import { searchByBing } from '../../src/index.ts'
 import type { SearchResult } from '../../src/index.ts'
 
 const ALLOWED_KEYS = new Set([
+    'entrance',
+    'elapsedMs',
     'pages',
     'overview',
     'relatedQuestions',
@@ -30,13 +42,23 @@ const ALLOWED_KEYS = new Set([
 const QUERIES = ['经济应用数学基础', '洛天依', 'Redis 持久化 RDB AOF 原理']
 
 describe('在线端到端契约', () => {
-    /** 每个 query 只跑一次真实请求，各断言共享 */
+    /** 默认选项：每个 query 只跑一次真实请求，各断言共享 */
     const results = new Map<string, SearchResult>()
+    /** 三个开关全开：素材类断言只用这一份，覆盖 page.richContents / video / images */
+    const full = new Map<string, SearchResult>()
 
     before(
         async () => {
             for (const q of QUERIES) {
                 results.set(q, await searchByBing(q))
+                full.set(
+                    q,
+                    await searchByBing(q, {
+                        includeRichContents: true,
+                        includeImages: true,
+                        includeVideos: true,
+                    })
+                )
             }
         },
         { timeout: 180_000 }
@@ -79,21 +101,29 @@ describe('在线端到端契约', () => {
                 assert.deepEqual(bad, [])
             })
 
-            it('默认不返回图标 / 图片卡 / 视频卡 ' + short, () => {
+            it('默认不返回素材 / 图片卡 / 视频卡 ' + short, () => {
                 const r = results.get(q)!
-                const withIcon = r.pages.filter(
-                    p =>
-                        ((p.type === 'page' || p.type === 'pdf') &&
-                            p.favicon != null) ||
-                        (p.type === 'news' && p.logo != null)
+                assert.deepEqual(
+                    r.pages.filter(p => p.richContents != null),
+                    [],
+                    '默认应剥离 richContents'
                 )
-                assert.deepEqual(withIcon, [], '默认应剥离图标')
                 assert.equal(r.images, undefined, '默认不返回图片卡')
                 assert.deepEqual(
                     r.pages.filter(p => p.type === 'video'),
                     [],
                     '默认不返回视频卡'
                 )
+            })
+
+            it('entrance 与 elapsedMs 合法 ' + short, () => {
+                const r = results.get(q)!
+                assert.ok(
+                    r.entrance === 'cn' || r.entrance === 'international',
+                    '非法 entrance: ' + r.entrance
+                )
+                assert.equal(typeof r.elapsedMs, 'number')
+                assert.ok(r.elapsedMs >= 0 && Number.isFinite(r.elapsedMs))
             })
 
             it('relatedQuestions 条目合法 ' + short, () => {
@@ -146,10 +176,9 @@ describe('在线端到端契约', () => {
             const short = q.slice(0, 8)
 
             it('video 条目合法 ' + short, t => {
-                const list = results
-                    .get(q)!
-                    .pages.filter(p => p.type === 'video')
-                if (list.length === 0) return t.skip('该结果无视频卡')
+                const list = full.get(q)!.pages.filter(p => p.type === 'video')
+                if (list.length === 0)
+                    return t.skip('该结果无视频卡（开关已开，确实是 0 条）')
                 const bad = list.filter(
                     x => !x.title || !/^https?:\/\//.test(x.url)
                 )
@@ -157,17 +186,22 @@ describe('在线端到端契约', () => {
             })
 
             it('内嵌视频合法 ' + short, t => {
-                const list = results
+                // 内嵌视频归在 richContents 下，跟着 includeRichContents 走
+                // （不受 includeVideos 影响），所以这里取全开的那份
+                const list = full
                     .get(q)!
                     .pages.filter(
-                        p => p.type === 'page' && p.video !== undefined
+                        p =>
+                            p.type === 'page' &&
+                            p.richContents?.video !== undefined
                     )
-                if (list.length === 0) return t.skip('该结果无内嵌视频')
+                if (list.length === 0)
+                    return t.skip('该结果无内嵌视频（开关已开，确实没有）')
                 const bad = list.filter(
                     p =>
                         p.type === 'page' &&
-                        p.video !== undefined &&
-                        p.video.source !== 'inline'
+                        p.richContents?.video !== undefined &&
+                        !/^https?:\/\//.test(p.richContents.video.url)
                 )
                 assert.deepEqual(bad, [])
             })
@@ -197,13 +231,30 @@ describe('在线端到端契约', () => {
             })
 
             it('images 条目合法 ' + short, t => {
-                const img = results.get(q)!.images
-                if (!img) return t.skip('该结果无图片卡')
+                const img = full.get(q)!.images
+                if (!img) return t.skip('该结果无图片卡（开关已开，确实没有）')
                 assert.ok(img.items.length > 0)
                 const bad = img.items.filter(
                     i => !/^https?:\/\//.test(i.thumbnailUrl)
                 )
                 assert.deepEqual(bad, [])
+            })
+
+            it('全开时素材字段形状合法 ' + short, t => {
+                const rich = full
+                    .get(q)!
+                    .pages.filter(p => p.richContents != null)
+                if (rich.length === 0)
+                    return t.skip('该结果无任何素材（开关已开，确实没有）')
+                for (const p of rich) {
+                    const rc = p.richContents!
+                    if (rc.favicon !== undefined)
+                        assert.match(rc.favicon, /^https?:\/\//, 'favicon')
+                    // 只有网页型（page / pdf）有 links；用 in 收窄联合类型
+                    if (!('links' in rc)) continue
+                    for (const l of rc.links ?? [])
+                        assert.match(l.url, /^https?:\/\//, 'links.url')
+                }
             })
 
             it('overview 结构合法 ' + short, t => {

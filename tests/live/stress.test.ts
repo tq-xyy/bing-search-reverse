@@ -1,8 +1,11 @@
 /**
  * 全量压测（原 scripts/regression/stress-bing.ts，2026-10-24 并入默认测试）
  *
- * 判定：只统计**空结果率**——能拿到条目 = 请求层正常；0 条 = 请求失败
- * （重试耗尽）或引擎未返回 b_algo。不做可信度断言：pages 就是 Bing 的返回。
+ * 判定：只统计**失败率**——能拿到条目 = 请求层正常；抛错 = 请求失败（重试耗尽）；
+ * 0 条 = 引擎未返回 b_algo。不做可信度断言：pages 就是 Bing 的返回。
+ *
+ * 注意失败语义：searchByBing 失败时**抛错**，不返回空结果。所以这里必须
+ * 捕获异常并保留原文——否则一次网络抖动会直接让整个 it 崩掉，看不出是哪种失败。
  *
  * ⚠️ 必须写成单个 it 内部并发：
  *    node --test 默认**串行**跑用例，24 个 it = 24 次串行 ≈ 20s+；
@@ -43,9 +46,9 @@ const WORDS = [
     'Vue SSR Nuxt.js',
 ] as const
 
-it('24 词压测：零空结果', { timeout: 180_000 }, async () => {
+it('24 词压测：零失败零空结果', { timeout: 180_000 }, async () => {
     const t0 = Date.now()
-    const results: { q: string; n: number }[] = []
+    const results: { q: string; n: number; error?: string }[] = []
 
     // 并发 6 而不是 24：实测（2026-10-24，多轮）
     //   并发  8 → 多数 0 空结果，但在刚跑完其他在线测试时会冒 5~8 个
@@ -54,12 +57,23 @@ it('24 词压测：零空结果', { timeout: 180_000 }, async () => {
     // 用 worker pool 限流，既保住并行又避开风控。
     const CONCURRENCY = 6
     let next = 0
+    type Outcome = { q: string; n: number; error?: string }
+    /**
+     * 一次查询：成功记条数，失败记错误原文。
+     * 必须 catch——失败语义是抛错，吞不掉就会让整个 it 崩在第一处抖动上。
+     */
+    const run = async (q: string): Promise<Outcome> => {
+        try {
+            const r = await searchByBing(q)
+            return { q, n: r.pages.length }
+        } catch (e) {
+            return { q, n: 0, error: (e as Error).message }
+        }
+    }
     await Promise.all(
         Array.from({ length: CONCURRENCY }, async () => {
             while (next < WORDS.length) {
-                const q = WORDS[next++]!
-                const r = await searchByBing(q)
-                results.push({ q, n: r.pages.length })
+                results.push(await run(WORDS[next++]!))
             }
         })
     )
@@ -67,13 +81,17 @@ it('24 词压测：零空结果', { timeout: 180_000 }, async () => {
     // 空结果可能是并发限流（服务端行为），不一定是代码缺陷。
     // 串行重试一次：仍空才说明请求层真的坏了。
     // 这是本项目「无区分度基线」纪律的直接应用——不能拿噪声当信号。
-    const retried: { q: string; n: number }[] = []
-    for (const x of results.filter(v => v.n === 0)) {
-        const r = await searchByBing(x.q)
-        retried.push({ q: x.q, n: r.pages.length })
-    }
+    const retried: Outcome[] = []
+    for (const x of results.filter(v => v.n === 0))
+        retried.push(await run(x.q))
     const durMs = Date.now() - t0
 
+    // 先看「抛错」：这才是请求层真的失败，空 pages 另有含义
+    assert.deepEqual(
+        retried.filter(x => x.error).map(x => x.q + ': ' + x.error),
+        [],
+        '串行重试后仍抛错 = 请求层失败（非并发限流）'
+    )
     const stillEmpty = retried.filter(x => x.n === 0)
     assert.deepEqual(
         stillEmpty.map(x => x.q),

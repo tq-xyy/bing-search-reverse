@@ -3,7 +3,7 @@ import { getSession, invalidateSession, type Session } from './net/session.ts'
 import { assertOk, backoffDelay, toSearchHttpError } from './net/errors.ts'
 import { parseSearchPage } from './parse/index.ts'
 import { applyResultShape } from './shape.ts'
-import type { SearchOptions, SearchResult } from './contract.ts'
+import type { ParsedSearch, SearchOptions, SearchResult } from './contract.ts'
 import { loadRelatedAnswers } from './net/paa.ts'
 import {
     IG_RE,
@@ -79,7 +79,7 @@ async function requestPage(
 async function attachAnswers(
     session: Session,
     page: FetchedPage,
-    result: SearchResult,
+    result: ParsedSearch,
     options: SearchOptions | undefined
 ): Promise<void> {
     if (options?.loadRelatedAnswers === false) return
@@ -102,17 +102,20 @@ async function attachAnswers(
     }
 }
 
+/**
+ * 搜索一次。
+ *
+ * 失败语义：不可重试的错误立刻抛，可重试的错误在重试耗尽后抛最后一次的
+ * `SearchHttpError`。**不返回空结果**——空 `pages` 只表示 Bing 确实没给结果，
+ * 把「网络挂了」伪装成「没有结果」会让下游没法分辨。
+ */
 async function search(
     query: string,
     options: SearchOptions | undefined,
     entrance: BingEntrance
 ): Promise<SearchResult> {
+    const startedAt = performance.now()
     const nowMs = Date.now()
-    const empty: SearchResult = {
-        pages: [],
-        relatedQuestions: [],
-        relatedSearches: [],
-    }
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
         let page: FetchedPage
@@ -122,21 +125,27 @@ async function search(
             page = await requestPage(query, session, entrance)
         } catch (e) {
             const err = toSearchHttpError(e)
-            if (!err.retryable) return empty
+            if (!err.retryable) throw err
             invalidateSession()
             if (attempt < MAX_ATTEMPTS) {
                 await wait(backoffDelay(attempt))
                 continue
             }
-            return empty
+            throw err
         }
 
         const result = parseSearchPage(page.html, nowMs)
         await attachAnswers(session, page, result, options)
         applyResultShape(result, options)
-        return result
+        return {
+            ...result,
+            entrance,
+            elapsedMs: Math.round(performance.now() - startedAt),
+        }
     }
-    return empty
+
+    // 循环只会在最后一次尝试失败时抛错，这里仅为让类型收敛
+    throw new Error('search: retry loop exhausted without a result')
 }
 
 /** 搜索国内版（cn.bing.com）。 */

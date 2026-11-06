@@ -1,33 +1,20 @@
 # 两个入口：国内版与国际版
 
-`searchByBing(query, { bingEnterance })` 的两个取值。本文回答：检索质量谁更好、
+`searchByBing(query, { bingEntrance })` 的两个取值。本文回答：检索质量谁更好、
 该默认哪个。
 
 ## 入口选择
 
-```ts
-// 中国大陆与港澳台 → cn，其余 → international
-const CN_TIMEZONES = new Set([
-    'Asia/Shanghai',
-    'Asia/Chongqing',
-    'Asia/Harbin',
-    'Asia/Urumqi',
-    'Asia/Kashgar',
-    'PRC',
-    'Asia/Hong_Kong',
-    'Asia/Macau',
-    'Asia/Taipei',
-])
+规则只有一条：**显式传 `bingEntrance` 永远优先；不传则按运行时时区推测**
+（中国大陆与港澳台的时区 → `cn`，其余 → `international`）。
+时区名单与判定函数只在 `src/entrance.ts` 的 `resolveEntrance()` 里维护一份
+（单测在 `tests/offline/entrance.test.ts`），本文不复述代码——两份一定会漂移。
 
-function resolveEntrance(explicit, timeZone) {
-    if (explicit === 'cn' || explicit === 'international') return explicit
-    return CN_TIMEZONES.has(timeZone) ? 'cn' : 'international'
-}
-```
+实际生效的入口会回填到结果的 `entrance` 字段，所以调用方不需要自己再算一遍。
 
-**显式传 `bingEnterance` 永远优先。** 时区推测只是默认值。
-
-> 但实际上没什么意义，因为绑定的是 cn.bing.com 这个域名。
+> **两个入口打的是同一个域名**（`cn.bing.com`），区别只在于 URL 上多一个
+> `ensearch=1`、界面语言与结果池随之改变。所以入口不是"连到哪台服务器"，
+> 而是"要哪一池结果"。[PROTOCOL.md](PROTOCOL.md) 里有完整参数。
 
 ## 该用哪个：判据
 

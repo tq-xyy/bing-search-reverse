@@ -10,7 +10,7 @@ import {
 import { extractOverview } from './overview.ts'
 import { extractRelatedQuestions } from './questions.ts'
 import { extractCorrection } from './correction.ts'
-import type { SearchResult, SearchResultPage } from '../contract.ts'
+import type { ParsedSearch, ResultItem } from '../contract.ts'
 
 /** 结果流容器；缺结果流时退回全局 li.b_algo / li.b_ans。 */
 function collectContainers(doc: Document): Element[] {
@@ -26,11 +26,11 @@ function collectContainers(doc: Document): Element[] {
 export function parseSearchPage(
     html: string,
     nowMs = Date.now()
-): SearchResult {
+): ParsedSearch {
     const doc: Document = parse(html)
     const items = collectContainers(doc)
 
-    const pages: SearchResultPage[] = []
+    const pages: ResultItem[] = []
     for (const item of items) {
         const wpt = extractWptResults(item, nowMs)
         if (wpt.length) pages.push(...wpt)

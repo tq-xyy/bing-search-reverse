@@ -12,13 +12,13 @@ import { existsSync, readFileSync } from 'node:fs'
 import { describe, it } from 'node:test'
 
 import { parseSearchPage } from '../../src/parse/index.ts'
-import { stripIcons, applyResultShape } from '../../src/shape.ts'
+import { stripRichContents, applyResultShape } from '../../src/shape.ts'
 import type {
     WebPage,
     PdfPage,
     VideoPage,
     NewsPage,
-    SearchResult,
+    ParsedSearch,
 } from '../../src/contract.ts'
 import { parsePaaAnswer } from '../../src/parse/paa-answer.ts'
 import { parse, hasClass } from '../../src/parse/dom.ts'
@@ -43,7 +43,7 @@ for (const s of SLUGS) {
 }
 
 /** 按类型取条目（主结果断言不掺视频/资讯条目）。 */
-function pagesOf<T extends SearchResult['pages'][number]>(
+function pagesOf<T extends ParsedSearch['pages'][number]>(
     slug: string,
     type: T['type']
 ): T[] {
@@ -109,7 +109,7 @@ describe('1. 日期前缀', () => {
     // 表驱动：覆盖「前」/「之前」两种后缀、day/hour 两种精度、有无「前」字
     const PREFIXED: [prefix: string, date: string | undefined][] = [
         ['1 天前', '2026-10-16'],
-        ['10 小时之前', '2026-10-17 02'],
+        ['10 小时之前', '2026-10-17T02'],
         ['10 小时', undefined], // 缺「前」字的时长不算日期
     ]
     for (const [prefix, date] of PREFIXED) {
@@ -149,7 +149,7 @@ describe('2. 相对时间换算（固定 nowMs）', () => {
         assert.deepEqual(
             parseDateTime('8 小时', NOW, { allowBareDuration: true }),
             {
-                value: '2026-10-17 04',
+                value: '2026-10-17T04',
                 precision: 'hour',
             }
         )
@@ -245,7 +245,7 @@ describe('3. URL 工具', () => {
 })
 
 describe('4. 主结果（type=page）', () => {
-    const dated = web('luotianyi').filter(p => p.date)
+    const dated = web('luotianyi').filter(p => p.publishedAt)
     /** 富化结果（class 是多值 b_algo b_rc_gb_template）若被丢弃，这里就会是 undefined */
     const baike = web('luotianyi').find(p => /百度百科/.test(p.title))
 
@@ -287,19 +287,21 @@ describe('4. 主结果（type=page）', () => {
         assert.match(baike?.url ?? '', /^https?:\/\/[^/]*baike\.baidu\.com\//)
     })
 
-    it('date 一律带 datePrecision', () => {
+    it('publishedAt 长度只能是 10 / 13 / 16', () => {
         assert.deepEqual(
-            dated.filter(p => !p.datePrecision).map(p => p.date),
+            dated.filter(p => ![10, 13, 16].includes(p.publishedAt!.length)),
             []
         )
     })
 
     it('day 精度不带时刻（不再补 00:00）', () => {
         const bad = dated.filter(
-            p => p.datePrecision === 'day' && p.date!.length !== 10
+            p =>
+                p.publishedAt!.length === 10 &&
+                !/^\d{4}-\d{2}-\d{2}$/.test(p.publishedAt!)
         )
         assert.deepEqual(
-            bad.map(p => p.date),
+            bad.map(p => p.publishedAt),
             []
         )
     })
@@ -315,18 +317,16 @@ describe('4. 主结果（type=page）', () => {
         )
     })
 
-    // date 必须与 datePrecision 自洽：day→10 位、hour→13 位、minute→16 位
-    it('date 形状与精度自洽', () => {
+    // 形状由长度自证：10 位到日、13 位到时、16 位到分，日期与时刻用 T 分隔
+    it('publishedAt 形状与长度自洽', () => {
         const bad = dated.filter(p => {
-            const d = p.date!
-            if (p.datePrecision === 'day')
-                return !/^\d{4}-\d{2}-\d{2}$/.test(d)
-            if (p.datePrecision === 'hour')
-                return !/^\d{4}-\d{2}-\d{2} \d{2}$/.test(d)
-            return !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(d)
+            const d = p.publishedAt!
+            if (d.length === 10) return !/^\d{4}-\d{2}-\d{2}$/.test(d)
+            if (d.length === 13) return !/^\d{4}-\d{2}-\d{2}T\d{2}$/.test(d)
+            return !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(d)
         })
         assert.deepEqual(
-            bad.map(p => p.date + '/' + p.datePrecision),
+            bad.map(p => p.publishedAt),
             []
         )
     })
@@ -339,7 +339,7 @@ describe('4. 主结果（type=page）', () => {
         for (const slug of SLUGS) {
             for (const p of web(slug)) {
                 assert.match(
-                    p.favicon ?? '',
+                    p.richContents?.favicon ?? '',
                     /^https?:\/\//,
                     slug + ' 的 ' + p.title.slice(0, 20) + ' 缺 favicon'
                 )
@@ -348,15 +348,16 @@ describe('4. 主结果（type=page）', () => {
     })
 
     it('洛天依的展开内容（b_rcGbMod）被解析', () => {
-        const p = web('luotianyi').find(x => x.rich)
+        const p = web('luotianyi').find(x => x.richContents?.rich)
         assert.ok(p, '没有条目带 rich')
-        assert.ok((p!.rich?.sections.length ?? 0) > 0)
-        assert.ok(p!.rich!.sections.every(s => s.title || s.text))
-        assert.match(p!.rich!.url ?? '', /^https?:\/\//)
+        const rich = p!.richContents!.rich!
+        assert.ok(rich.sections.length > 0)
+        assert.ok(rich.sections.every(s => s.title || s.text))
+        assert.match(rich.url ?? '', /^https?:\/\//)
     })
 
     it('普通条目没有 rich 时不伪造', () => {
-        assert.equal(web('dsh').filter(p => p.rich).length, 0)
+        assert.equal(web('dsh').filter(p => p.richContents?.rich).length, 0)
     })
 })
 
@@ -403,9 +404,10 @@ describe('6. 视频（type=video 与 page.video）', () => {
         assert.equal(videos('luotianyi').length, 3)
     })
 
-    it('视频条目带卡头（标题/更多链接）', () => {
-        assert.match(v?.card.title ?? '', /洛天依/)
-        assert.ok(v?.card.moreUrl)
+    // 卡头（「<查询词> 的视频」+「更多视频」链接）能由 query 推出，不再单独暴露
+    it('视频条目不再带卡头字段', () => {
+        assert.equal('card' in (v ?? {}), false)
+        assert.equal('source' in (v ?? {}), false)
     })
 
     it('视频有 title/url', () => {
@@ -413,8 +415,8 @@ describe('6. 视频（type=video 与 page.video）', () => {
         assert.match(v?.url ?? '', /^https?:\/\//)
     })
 
-    it('视频有缩略图', () => {
-        assert.match(v?.thumbnail ?? '', /^https?:\/\//)
+    it('视频有缩略图（richContents.thumbnail）', () => {
+        assert.match(v?.richContents?.thumbnail ?? '', /^https?:\/\//)
     })
 
     it('视频有 duration', () => {
@@ -429,30 +431,37 @@ describe('6. 视频（type=video 与 page.video）', () => {
         assert.ok(v?.uploader)
     })
 
-    it('视频发布时间带精度', () => {
-        assert.ok(v?.published)
-        assert.ok(v?.publishedPrecision)
-        if (v!.publishedPrecision === 'day')
-            assert.match(v!.published!, /^\d{4}-\d{2}-\d{2}$/)
-        else if (v!.publishedPrecision === 'hour')
-            assert.match(v!.published!, /^\d{4}-\d{2}-\d{2} \d{2}$/)
-        else assert.match(v!.published!, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/)
+    it('视频发布时间 → publishedAt，形状由长度自证', () => {
+        assert.ok(v?.publishedAt)
+        const d = v!.publishedAt!
+        assert.ok(
+            /^\d{4}-\d{2}-\d{2}$/.test(d) ||
+                /^\d{4}-\d{2}-\d{2}T\d{2}$/.test(d) ||
+                /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(d),
+            '非法形态: ' + d
+        )
     })
 
     // 内嵌形态：dsh 与 dsv41 没有视频卡，但主结果里内嵌了视频
-    const inline = web('dsh').find(p => p.video)?.video
+    const inline = web('dsh').find(p => p.richContents?.video)?.richContents
+        ?.video
 
     it('dsh 没有视频卡', () => {
         assert.equal(videos('dsh').length, 0)
     })
 
-    it('dsh 有内嵌视频', () => {
+    it('dsh 有内嵌视频（richContents.video）', () => {
         assert.ok(inline)
-        assert.equal(inline!.source, 'inline')
+        assert.match(inline!.url, /^https?:\/\//)
+    })
+
+    it('内嵌视频不声明简介与发布时间（该 DOM 不提供）', () => {
+        assert.equal('description' in (inline ?? {}), false)
+        assert.equal('publishedAt' in (inline ?? {}), false)
     })
 
     it('内嵌视频标题由所属 page 承载', () => {
-        const p = web('dsh').find(x => x.video)
+        const p = web('dsh').find(x => x.richContents?.video)
         assert.ok(p?.title && p.title.length > 5)
     })
 
@@ -477,12 +486,12 @@ describe('7. 资讯（type=news）', () => {
     })
 
     // 时间在 footer 末尾（"凤凰网科技 · 10 小时"），不能整串直接解析
-    it('dsv41 资讯时间也换算（footer "来源 · N 小时" 形态 → hour 精度）', () => {
+    it('dsv41 资讯时间也换算（footer "来源 · N 小时" → 13 位）', () => {
         const items = news('dsv41')
         assert.ok(items.length > 0)
         for (const n of items) {
-            assert.match(n.time ?? '', /^\d{4}-\d{2}-\d{2} \d{2}$/)
-            assert.equal(n.timePrecision, 'hour')
+            assert.match(n.publishedAt ?? '', /^\d{4}-\d{2}-\d{2}T\d{2}$/)
+            assert.equal(n.publishedAt!.length, 13)
         }
     })
 
@@ -493,13 +502,13 @@ describe('7. 资讯（type=news）', () => {
         assert.equal(news('distinguish').length, 5)
     })
 
-    it('资讯有 source', () => {
-        assert.ok(n0?.source)
+    it('资讯有 site（媒体名取自 cite 的 title）', () => {
+        assert.ok(n0?.site)
     })
 
-    it('资讯时间已换算且带 hour 精度', () => {
-        assert.equal(n0?.time, '2026-10-17 04')
-        assert.equal(n0?.timePrecision, 'hour')
+    it('资讯时间已换算且只到小时', () => {
+        assert.equal(n0?.publishedAt, '2026-10-17T04')
+        assert.equal(n0?.publishedAt!.length, 13)
     })
 
     it('资讯 url 是绝对地址', () => {
@@ -510,10 +519,21 @@ describe('7. 资讯（type=news）', () => {
         assert.ok(n0?.snippet)
     })
 
-    it('资讯 source logo（pubimg data-src-hq）被补全', () => {
-        const withLogo = news('dsv41').find(n => n.logo)
+    it('资讯媒体 logo（pubimg data-src-hq）被补全到 richContents.favicon', () => {
+        const withLogo = news('dsv41').find(n => n.richContents?.favicon)
         assert.ok(withLogo, '没有一条资讯带 logo')
-        assert.match(withLogo!.logo!, /^https:\/\/www\.bing\.com\//)
+        assert.match(
+            withLogo!.richContents!.favicon!,
+            /^https:\/\/www\.bing\.com\//
+        )
+    })
+
+    it('资讯缩略图（.imagewrap img）解析到 richContents.thumbnail', () => {
+        const withThumb = news('distinguish').find(
+            n => n.richContents?.thumbnail
+        )
+        assert.ok(withThumb, 'nscjk 变体的缩略图没有被解析')
+        assert.match(withThumb!.richContents!.thumbnail!, /^https?:\/\//)
     })
 })
 
@@ -533,8 +553,12 @@ describe('8. 图片卡（顶层 images）', () => {
         assert.match(ly?.images?.url ?? '', /^https?:\/\//)
     })
 
-    it('有 moreUrl', () => {
-        assert.match(ly?.images?.moreUrl ?? '', /^https?:\/\//)
+    // 卡头 url 与「更多」链接只差 FORM 参数，指向同一搜索页，故只保留一个
+    it('只暴露卡头 url，不再有 moreUrl', () => {
+        assert.equal(
+            'moreUrl' in ((ly?.images ?? {}) as Record<string, unknown>),
+            false
+        )
     })
 
     it('缩略图是绝对 URL', () => {
@@ -593,19 +617,19 @@ describe('9. 答案摘要（两套 DOM + kind）', () => {
         assert.ok((dsh?.overview?.paragraphs.length ?? 0) >= 2)
     })
 
-    it('cht 摘要有多条来源', () => {
-        assert.ok((dsh?.overview?.sources.length ?? 0) >= 2)
+    it('cht 摘要有多条引用', () => {
+        assert.ok((dsh?.overview?.citations.length ?? 0) >= 2)
     })
 
-    it('来源 url 是绝对地址', () => {
-        const bad = (dsh?.overview?.sources ?? []).filter(
-            s => !/^https?:\/\//.test(s.url)
+    it('引用 url 是绝对地址', () => {
+        const bad = (dsh?.overview?.citations ?? []).filter(
+            c => !/^https?:\/\//.test(c.url)
         )
         assert.deepEqual(bad, [])
     })
 
-    it('来源 name 非空', () => {
-        const bad = (dsh?.overview?.sources ?? []).filter(s => !s.name)
+    it('引用 site 非空（站点名取自 .md_citlink__site）', () => {
+        const bad = (dsh?.overview?.citations ?? []).filter(c => !c.site)
         assert.deepEqual(bad, [])
     })
 
@@ -621,8 +645,8 @@ describe('9. 答案摘要（两套 DOM + kind）', () => {
         assert.ok((dist?.overview?.paragraphs.length ?? 0) > 0)
     })
 
-    it('gs 摘要来源被去 # 片段', () => {
-        assert.doesNotMatch(dist?.overview?.sources[0]?.url ?? '', /#/)
+    it('gs 摘要引用被去 # 片段', () => {
+        assert.doesNotMatch(dist?.overview?.citations[0]?.url ?? '', /#/)
     })
 
     // 无答案卡的样本必须缺省（而非空壳对象）
@@ -630,10 +654,10 @@ describe('9. 答案摘要（两套 DOM + kind）', () => {
         assert.equal(PAGES.get('xinzhisheng')?.overview, undefined)
     })
 
-    it('overview 来源图标字段合法（有则 http）', () => {
+    it('overview 引用图标字段合法（有则 http）', () => {
         for (const slug of SLUGS) {
-            for (const s of PAGES.get(slug)?.overview?.sources ?? []) {
-                if (s.favicon) assert.match(s.favicon, /^https?:\/\//)
+            for (const c of PAGES.get(slug)?.overview?.citations ?? []) {
+                if (c.favicon) assert.match(c.favicon, /^https?:\/\//)
             }
         }
     })
@@ -691,11 +715,11 @@ describe(
             assert.ok(!ps.some(p => p.includes('复制')))
         })
 
-        it('段落剥离不再清空来源站名', () => {
-            const sources = rich.overview?.sources ?? []
-            assert.ok(sources.length > 0)
+        it('段落剥离不再清空引用站名', () => {
+            const citations = rich.overview?.citations ?? []
+            assert.ok(citations.length > 0)
             assert.deepEqual(
-                sources.filter(s => !s.name),
+                citations.filter(c => !c.site),
                 []
             )
         })
@@ -860,7 +884,7 @@ describe('12. 结果流容器枚举', () => {
         const r = parseSearchPage(html, NOW)
         const p = r.pages.find(x => x.type === 'page') as WebPage
         assert.deepEqual(
-            p.links?.map(l => l.title),
+            p.richContents?.links?.map(l => l.title),
             ['扩展一', '扩展二']
         )
     })
@@ -902,7 +926,7 @@ describe('13. 新组件（cards3 样本）', { skip: NO_NEW }, () => {
             for (const p of r.pages) {
                 if (p.type !== 'page') continue
                 assert.match(
-                    p.favicon ?? '',
+                    p.richContents?.favicon ?? '',
                     /^https?:\/\//,
                     slug + ' 缺 favicon'
                 )
@@ -943,21 +967,23 @@ describe('13. 新组件（cards3 样本）', { skip: NO_NEW }, () => {
             '什么是向量数据库',
         ]) {
             const pages = newWeb(slug)
-            const rich = pages.find(p => p.rich)
+            const rich = pages.find(p => p.richContents?.rich)
             assert.ok(rich, slug + ' 没有 rich')
-            assert.ok((rich!.rich?.sections.length ?? 0) > 0)
-            assert.ok(rich!.rich!.sections.some(s => s.title || s.text))
+            const card = rich!.richContents!.rich!
+            assert.ok(card.sections.length > 0)
+            assert.ok(card.sections.some(s => s.title || s.text))
         }
     })
 
     it('苏轼的图片侧边栏（b_imgcap_img）', () => {
-        const pages = newWeb('苏轼').filter(p => p.sideImage)
+        const pages = newWeb('苏轼').filter(p => p.richContents?.sideImage)
         assert.equal(pages.length, 2)
         for (const p of pages) {
-            assert.match(p.sideImage!.thumbnailUrl, /^https?:\/\//)
-            assert.match(p.sideImage!.detailUrl ?? '', /^https?:\/\//)
-            assert.ok((p.sideImage!.width ?? 0) > 0)
-            assert.ok((p.sideImage!.height ?? 0) > 0)
+            const image = p.richContents!.sideImage!
+            assert.match(image.thumbnailUrl, /^https?:\/\//)
+            assert.match(image.detailUrl ?? '', /^https?:\/\//)
+            assert.ok((image.width ?? 0) > 0)
+            assert.ok((image.height ?? 0) > 0)
         }
     })
 
@@ -972,10 +998,10 @@ describe('13. 新组件（cards3 样本）', { skip: NO_NEW }, () => {
     })
 
     it('深链接/扩展链接（VCP 的 b_vtl_deeplinks）', () => {
-        const page = newWeb('VCP').find(p => p.links?.length)
+        const page = newWeb('VCP').find(p => p.richContents?.links?.length)
         assert.ok(page, 'VCP 没有 links')
-        assert.ok((page!.links!.length ?? 0) >= 3)
-        for (const l of page!.links!) {
+        assert.ok((page!.richContents!.links!.length ?? 0) >= 3)
+        for (const l of page!.richContents!.links!) {
             assert.ok(l.title)
             assert.match(l.url, /^https?:\/\//)
         }
@@ -999,32 +1025,45 @@ describe('13. 新组件（cards3 样本）', { skip: NO_NEW }, () => {
 })
 
 // ══════════════════════════════════════════════════════════════
-describe('图标出口裁剪（stripIcons）', () => {
-    it('剥掉 favicon / logo / 来源图标 / PAA 引用图标，核心字段不动', () => {
-        const result: SearchResult = {
+describe('素材出口裁剪（stripRichContents）', () => {
+    it('剥掉 richContents 与引用图标，核心字段不动', () => {
+        const result: ParsedSearch = {
             pages: [
                 {
                     type: 'page',
                     title: '标题',
                     url: 'https://example.com/a',
                     snippet: '摘要',
-                    favicon: 'https://ts2.tc.mm.bing.net/th?id=fav',
+                    richContents: {
+                        favicon: 'https://ts2.tc.mm.bing.net/th?id=fav',
+                        links: [{ title: '深链接', url: 'https://e.com/b' }],
+                    },
                 } satisfies WebPage,
                 {
                     type: 'news',
                     title: '资讯',
                     url: 'https://example.com/n',
-                    logo: 'https://www.bing.com/th?id=logo',
-                    card: { title: '卡头' },
+                    richContents: {
+                        favicon: 'https://www.bing.com/th?id=logo',
+                        thumbnail: 'https://www.bing.com/th?id=thumb',
+                    },
                 } satisfies NewsPage,
+                {
+                    type: 'video',
+                    title: '视频',
+                    url: 'https://example.com/v',
+                    richContents: {
+                        thumbnail: 'https://www.bing.com/th?id=vt',
+                    },
+                } satisfies VideoPage,
             ],
             overview: {
                 kind: 'cht',
                 title: '摘要',
                 paragraphs: ['正文'],
-                sources: [
+                citations: [
                     {
-                        name: '来源',
+                        site: '来源',
                         url: 'https://example.com/s',
                         favicon: 'https://ts2.tc.mm.bing.net/th?id=src',
                     },
@@ -1044,43 +1083,46 @@ describe('图标出口裁剪（stripIcons）', () => {
             relatedSearches: ['相关搜索'],
         }
 
-        stripIcons(result)
+        stripRichContents(result)
 
+        // 四型一律剥整个 richContents，不做按 type 分派（漏一个分支就会漏一个）
         assert.equal(
-            result.pages[0].type === 'page' && result.pages[0].favicon,
-            undefined,
-            'favicon 应被剥离'
+            result.pages.filter(p => p.richContents != null).length,
+            0,
+            'richContents 应整体剥离'
         )
-        assert.equal(
-            result.pages[1].type === 'news' && result.pages[1].logo,
-            undefined,
-            'logo 应被剥离'
-        )
-        assert.equal(result.overview!.sources[0].favicon, undefined)
+        assert.equal(result.overview!.citations[0]!.favicon, undefined)
         assert.ok(
-            result.relatedQuestions[0].citations![0].favicon === undefined,
+            result.relatedQuestions[0]!.citations![0]!.favicon === undefined,
             'PAA 引用图标应被剥离'
         )
+        // 引用本身（url / site）属于检索数据，不能跟着素材一起消失
+        assert.equal(
+            result.overview!.citations[0]!.url,
+            'https://example.com/s'
+        )
+        assert.equal(result.overview!.citations[0]!.site, '来源')
         assert.equal((result.pages[0] as WebPage).url, 'https://example.com/a')
         assert.equal((result.pages[0] as WebPage).title, '标题')
         assert.equal((result.pages[0] as WebPage).snippet, '摘要')
-        assert.equal(result.relatedQuestions[0].question, '问题')
+        assert.equal(result.relatedQuestions[0]!.question, '问题')
         assert.equal(result.relatedSearches[0], '相关搜索')
     })
 
-    it('真实样本：解析层保留图标，剥离后消失且条数不变', () => {
+    it('真实样本：解析层保留素材，剥离后消失且条数不变', () => {
         const html = load('dsh')
         assert.ok(html, '缺 dsh 样本')
         const result = parseSearchPage(html, NOW)
         assert.ok(
-            result.pages.some(p => p.type === 'page' && p.favicon != null),
+            result.pages.some(
+                p => p.type === 'page' && p.richContents?.favicon != null
+            ),
             '解析层应保留 favicon（裁剪只发生在出口）'
         )
         const count = result.pages.length
-        stripIcons(result)
+        stripRichContents(result)
         assert.equal(
-            result.pages.filter(p => p.type === 'page' && p.favicon != null)
-                .length,
+            result.pages.filter(p => p.richContents != null).length,
             0
         )
         assert.equal(result.pages.length, count)
@@ -1090,7 +1132,7 @@ describe('图标出口裁剪（stripIcons）', () => {
 
 // ══════════════════════════════════════════════════════════════
 describe('出口裁剪（applyResultShape）', () => {
-    it('默认：剥图标、去图片卡、去视频卡', () => {
+    it('默认：剥素材、去图片卡、去视频卡', () => {
         const html = load('luotianyi')
         assert.ok(html, '缺 luotianyi 样本')
         const full = parseSearchPage(html, NOW)
@@ -1108,10 +1150,9 @@ describe('出口裁剪（applyResultShape）', () => {
             '视频卡应被移除'
         )
         assert.equal(
-            shaped.pages.filter(p => p.type === 'page' && p.favicon != null)
-                .length,
+            shaped.pages.filter(p => p.richContents != null).length,
             0,
-            '图标应被剥离'
+            '素材应被剥离'
         )
         assert.equal(shaped.pages.length, total - videoCount)
         assert.ok(shaped.pages.every(p => p.title && p.url))
@@ -1121,15 +1162,42 @@ describe('出口裁剪（applyResultShape）', () => {
         const html = load('luotianyi')
         assert.ok(html)
         const r = applyResultShape(parseSearchPage(html, NOW), {
-            includeIcons: true,
+            includeRichContents: true,
             includeImages: true,
             includeVideos: true,
         })
         assert.ok(r.images, '图片卡应恢复')
         assert.equal(r.pages.filter(p => p.type === 'video').length, 3)
         assert.ok(
-            r.pages.some(p => p.type === 'page' && p.favicon != null),
-            '图标应恢复'
+            r.pages.some(p => p.richContents?.favicon != null),
+            '素材应恢复'
+        )
+    })
+
+    it('内嵌视频跟 includeRichContents 走，不受 includeVideos 影响', () => {
+        const html = load('dsh')
+        assert.ok(html)
+        const withRich = applyResultShape(parseSearchPage(html, NOW), {
+            includeRichContents: true,
+            includeVideos: false,
+        })
+        assert.ok(
+            withRich.pages.some(
+                p => p.type === 'page' && p.richContents?.video != null
+            ),
+            '内嵌视频不该被 includeVideos 裁掉'
+        )
+
+        const withoutRich = applyResultShape(parseSearchPage(html, NOW), {
+            includeRichContents: false,
+            includeVideos: true,
+        })
+        assert.equal(
+            withoutRich.pages.filter(
+                p => p.type === 'page' && p.richContents?.video != null
+            ).length,
+            0,
+            '内嵌视频应随 richContents 一起被剥掉'
         )
     })
 })
@@ -1246,12 +1314,16 @@ describe('13. 词条卡与特殊查询（cards4）', () => {
             if (!r) return t.skip('缺少样本')
             const hourly = r.pages.filter(
                 (p): p is WebPage =>
-                    p.type === 'page' && p.datePrecision === 'hour'
+                    p.type === 'page' && p.publishedAt?.length === 13
             )
             assert.ok(hourly.length > 0, '该查询有「N 小时前」条目')
             for (const p of hourly) {
-                assert.equal(p.date!.length, 13, 'hour 精度必须是 13 位')
-                assert.ok(!/\d{2}:\d{2}$/.test(p.date!), '不得伪造分钟')
+                assert.equal(
+                    p.publishedAt!.length,
+                    13,
+                    'hour 精度必须是 13 位'
+                )
+                assert.ok(!/\d{2}:\d{2}$/.test(p.publishedAt!), '不得伪造分钟')
             }
         })
     })
@@ -1275,22 +1347,19 @@ describe('13. 词条卡与特殊查询（cards4）', () => {
             for (const p of r.pages) {
                 if (p.type !== 'video') continue
                 assert.ok(p.duration, '视频必须有 duration')
-                if (p.published) {
-                    assert.equal(p.publishedPrecision, 'day')
-                    assert.equal(p.published.length, 10)
-                }
+                if (p.publishedAt) assert.equal(p.publishedAt.length, 10)
             }
         })
 
-        it('内嵌视频不单独成条（作为 WebPage.video）', t => {
+        it('内嵌视频不单独成条（作为 WebPage.richContents.video）', t => {
             if (!r) return t.skip('缺少样本')
             const inline = r.pages.filter(
-                p => p.type === 'page' && p.video != null
+                p => p.type === 'page' && p.richContents?.video != null
             )
             assert.ok(inline.length > 0, '该查询有内嵌视频富摘要')
             for (const p of inline) {
-                if (p.type !== 'page' || !p.video) continue
-                assert.equal(p.video.source, 'inline')
+                if (p.type !== 'page' || !p.richContents?.video) continue
+                assert.match(p.richContents.video.url, /^https?:\/\//)
             }
         })
 
@@ -1411,7 +1480,7 @@ describe('17. 文档型主结果（type:pdf）', () => {
         for (const p of pdfs) {
             assert.ok(p.title.trim(), '标题不得混入 [PDF] 标记')
             assert.equal(p.title.includes('[PDF]'), false)
-            assert.ok(p.date && p.datePrecision, 'date 与精度必须成对')
+            assert.ok(p.publishedAt, 'PDF 也应该有 publishedAt')
         }
     })
 
@@ -1490,21 +1559,19 @@ describe('17. 文档型主结果（type:pdf）', () => {
         )
     })
 
-    it('出口裁剪对 pdf 同样生效（favicon 默认剥离）', () => {
+    it('出口裁剪对 pdf 同样生效（richContents 整体剥离）', () => {
         const r = PAGES.get('xinzhisheng')
         assert.ok(r)
         const full = structuredClone(r)
         assert.ok(
-            pdfOf(full).every(p => p.favicon),
+            pdfOf(full).every(p => p.richContents?.favicon),
             '解析层应保留 pdf 的 favicon'
         )
         const shaped = applyResultShape(full)
         assert.deepEqual(
-            shaped.pages
-                .filter(p => 'favicon' in p && p.favicon != null)
-                .map(p => p.type),
+            shaped.pages.filter(p => p.richContents != null).map(p => p.type),
             [],
-            'pdf 的 favicon 漏剥 = shape 里按 type 分派漏了分支'
+            'pdf 的 richContents 漏剥 = strip 里按 type 分派漏了分支'
         )
         // pdf 不参与任何裁剪：条数不变
         assert.equal(pdfOf(shaped).length, pdfOf(r).length)

@@ -113,17 +113,16 @@ describe('2. ck/a 链接在解析出口被还原', () => {
         const first = PARSED.momentum.pages[0]
         assert.equal(first.type, 'page')
         if (first.type !== 'page') return
-        assert.ok(first.rich?.url?.startsWith('https://baike.baidu.com/item/'))
-    })
-
-    it('打铁花：图片卡的更多链接是 cn.bing.com 图片搜索', () => {
         assert.ok(
-            PARSED.tiehua.images?.url?.startsWith(
-                'https://cn.bing.com/images/search?'
+            first.richContents?.rich?.url?.startsWith(
+                'https://baike.baidu.com/item/'
             )
         )
+    })
+
+    it('打铁花：图片卡头指向 cn.bing.com 图片搜索', () => {
         assert.ok(
-            PARSED.tiehua.images?.moreUrl?.startsWith(
+            PARSED.tiehua.images?.url?.startsWith(
                 'https://cn.bing.com/images/search?'
             )
         )

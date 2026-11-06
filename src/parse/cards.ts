@@ -1,7 +1,7 @@
 import { all, one, text, attr, type Element } from './dom.ts'
 import { absoluteAssetUrl, resolveBingUrl } from './urls.ts'
 import { isHttpUrl, readQueryParam } from '../utils/url.ts'
-import { parseDateTime, type DatePrecision } from '../utils/time.ts'
+import { parseDateTime } from '../utils/time.ts'
 import { collectUnique } from '../utils/collect.ts'
 
 const MAX_ITEMS = 20
@@ -25,18 +25,27 @@ export function extractRelatedSearches(related: Element[]): string[] {
     return []
 }
 
-/** 资讯条目（两个变体：nscjk_card_link / nscard_link）。 */
+/** 资讯条目的素材；默认不下发，需 includeRichContents。 */
+export interface NewsRichContents {
+    favicon?: string
+    thumbnail?: string
+}
+
+/**
+ * 资讯条目（两个变体：nscjk_card_link / nscard_link）。
+ *
+ * 与 WebPage 的差别在**时间语义**：这里是媒体的发布时刻，不是 Bing 的收录时间，
+ * 覆盖率也高得多。
+ */
 export interface NewsPage {
     type: 'news'
     title: string
     url: string
     snippet?: string
-    source?: string
-    /** 发布时间，按精度截断。 */
-    time?: string
-    timePrecision?: DatePrecision
-    logo?: string
-    card: { title?: string }
+    site?: string
+    /** 发布时刻，按可信精度截断（10 / 13 / 16 位，`T` 分隔）。 */
+    publishedAt?: string
+    richContents?: NewsRichContents
 }
 
 /** 时间在 footer 末尾，前面可能挂来源名：「凤凰网科技 · 10 小时」。 */
@@ -45,7 +54,7 @@ function newsTimeText(raw: string): string {
     return parts[parts.length - 1]!.trim()
 }
 
-function newsLogo(a: Element): string | undefined {
+function newsFavicon(a: Element): string | undefined {
     const img = one(
         'img.pubimg[data-src-hq], img.pubimg[data-src], .pubimg[data-src-hq]',
         a
@@ -53,6 +62,21 @@ function newsLogo(a: Element): string | undefined {
     return absoluteAssetUrl(
         img ? (attr(img, 'data-src-hq') ?? attr(img, 'data-src')) : undefined
     )
+}
+
+/** 新闻缩略图：`.imagewrap` 里的 itm_img（nscjk 变体才有）。 */
+function newsThumbnail(a: Element): string | undefined {
+    const img = one(
+        '.imagewrap img.itm_img[data-src-hq], ' +
+            '.imagewrap img[data-src], .imagewrap img[src]',
+        a
+    )
+    const raw = img
+        ? (attr(img, 'data-src-hq') ??
+          attr(img, 'data-src') ??
+          attr(img, 'src'))
+        : undefined
+    return raw ? absoluteAssetUrl(raw) : undefined
 }
 
 function newsTitleOf(a: Element): string {
@@ -68,9 +92,6 @@ export function extractNewsPages(
     container: Element,
     nowMs: number
 ): NewsPage[] {
-    const cardTitle = text(one('.acf-heading', container))
-    const card = cardTitle ? { title: cardTitle } : {}
-
     return collectUnique(
         all('a.nscjk_card_link, a.nscard_link', container),
         a => {
@@ -78,13 +99,13 @@ export function extractNewsPages(
             const url = resolveBingUrl(attr(a, 'href'))
             if (!title || !url) return null
 
-            const item: NewsPage = { type: 'news', title, url, card }
+            const item: NewsPage = { type: 'news', title, url }
 
             const snippet = text(one('.nscjk_card_snippet', a))
             if (snippet) item.snippet = snippet
 
-            const source = attr(one('cite', a), 'title')
-            if (source) item.source = source
+            const site = attr(one('cite', a), 'title')
+            if (site) item.site = site
 
             const parsedTime = parseDateTime(
                 newsTimeText(
@@ -93,13 +114,15 @@ export function extractNewsPages(
                 nowMs,
                 { allowBareDuration: true }
             )
-            if (parsedTime) {
-                item.time = parsedTime.value
-                item.timePrecision = parsedTime.precision
-            }
+            if (parsedTime) item.publishedAt = parsedTime.value
 
-            const logo = newsLogo(a)
-            if (logo) item.logo = logo
+            const richContents: NewsRichContents = {}
+            const favicon = newsFavicon(a)
+            if (favicon) richContents.favicon = favicon
+            const thumbnail = newsThumbnail(a)
+            if (thumbnail) richContents.thumbnail = thumbnail
+            if (Object.keys(richContents).length > 0)
+                item.richContents = richContents
 
             return { key: url, value: item }
         },
@@ -120,10 +143,13 @@ export interface ImageItem {
     id?: string
 }
 
+/**
+ * 图片卡。卡头链接指向「查看更多图片」；Bing 还会下发一个只差 FORM 参数的
+ * 「更多」链接，两种写法指向同一个搜索页，故不单独暴露。
+ */
 export interface ImageCard {
     title: string
     url?: string
-    moreUrl?: string
     items: ImageItem[]
 }
 
@@ -191,14 +217,10 @@ export function extractImageCard(
 
         const head = one('a.iacf_head', card)
         const url = resolveBingUrl(attr(head, 'href'))
-        const moreUrl = resolveBingUrl(
-            attr(one('a.salinkmmkifsa', card), 'href')
-        )
 
         return {
             title: text(head),
             url: url || undefined,
-            moreUrl: moreUrl || undefined,
             items,
         }
     }

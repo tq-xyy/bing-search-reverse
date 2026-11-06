@@ -1,6 +1,6 @@
 import { all, one, text, attr, type Element } from './dom.ts'
 import { absoluteAssetUrl, resolveBingUrl } from './urls.ts'
-import { extractDatePrefix, type DatePrecision } from '../utils/time.ts'
+import { extractDatePrefix } from '../utils/time.ts'
 import { collectUnique } from '../utils/collect.ts'
 import { extractRichCard, type RichCard } from './rich.ts'
 import { extractInlineVideo, type InlineVideo } from './video.ts'
@@ -35,22 +35,35 @@ export interface LinkItem {
     url: string
 }
 
+/**
+ * 素材与富化块：渲染用，不是检索数据。
+ *
+ * 单独成组是为了让出口裁剪只认一个开关（`includeRichContents`），
+ * 也为了让 `ResultItem` 那六个字段保持跨类型稳定。
+ */
+export interface RichContents {
+    favicon?: string
+    sideImage?: SideImage
+    rich?: RichCard
+    links?: LinkItem[]
+    video?: InlineVideo
+}
+
 /** 普通结果条目。 */
 export interface WebPage {
     type: 'page'
     title: string
     url: string
     snippet?: string
-    /** Bing 的收录/更新日，按精度截断。 */
-    date?: string
-    datePrecision?: DatePrecision
     /** Bing 展示名，可能错标；来源以 url 的 hostname 为准。 */
     site?: string
-    favicon?: string
-    sideImage?: SideImage
-    rich?: RichCard
-    links?: LinkItem[]
-    video?: InlineVideo
+    /**
+     * Bing 的收录 / 更新日，按可信精度截断（10 / 13 / 16 位，`T` 分隔）。
+     * 不是内容所指事件的发生时间。
+     */
+    publishedAt?: string
+    /** 素材；默认不下发，需 includeRichContents。 */
+    richContents?: RichContents
 }
 
 /** 主结果条目的公共字段（type 之外）。 */
@@ -178,31 +191,33 @@ export function extractWebDigest(
     const p = one('p[class*="b_lineclamp"]', container)
     if (p) {
         const parsed = extractDatePrefix(text(p), nowMs)
-        if (parsed.date) {
-            fields.date = parsed.date
-            if (parsed.datePrecision)
-                fields.datePrecision = parsed.datePrecision
-        }
+        if (parsed.date) fields.publishedAt = parsed.date
         if (parsed.rest) fields.snippet = parsed.rest
     }
 
     const site = text(one('.tptt', container))
     if (site) fields.site = site
 
+    // 素材先攒进独立对象，一条都没有时整个 richContents 不出现
+    const richContents: RichContents = {}
+
     const favicon = faviconOf(container)
-    if (favicon) fields.favicon = favicon
+    if (favicon) richContents.favicon = favicon
 
     const sideImage = sideImageOf(container)
-    if (sideImage) fields.sideImage = sideImage
+    if (sideImage) richContents.sideImage = sideImage
 
     const rich = extractRichCard(container)
-    if (rich) fields.rich = rich
+    if (rich) richContents.rich = rich
 
     const links = linksOf(container)
-    if (links.length) fields.links = links
+    if (links.length) richContents.links = links
 
     const video = extractInlineVideo(container, nowMs)
-    if (video) fields.video = video
+    if (video) richContents.video = video
+
+    if (Object.keys(richContents).length > 0)
+        fields.richContents = richContents
 
     return { docType: docTypeOf(container), fields }
 }

@@ -1,9 +1,14 @@
 import { all, one, text, attr, hasClass, type Element } from './dom.ts'
 import { resolveBingUrl } from './urls.ts'
 
-export interface OverviewSource {
-    name: string
+/** 摘要的一条引用来源。 */
+export interface OverviewCitation {
+    /** 链接原文，Bing 未给时缺失。 */
+    title?: string
+    /** 来源站点名。 */
+    site?: string
     url: string
+    /** 来源图标；默认不下发，需 includeRichContents。 */
     favicon?: string
 }
 
@@ -13,7 +18,8 @@ export interface Overview {
     title: string
     /** 正文块，Markdown 片段。 */
     paragraphs: string[]
-    sources: OverviewSource[]
+    /** 引用来源，按 URL 去重。 */
+    citations: OverviewCitation[]
 }
 
 const isNoise = (el: Element): boolean =>
@@ -132,22 +138,24 @@ function readCht(container: Element): Overview | undefined {
 
     const paragraphs = readChtBody(root)
 
-    const sources: OverviewSource[] = []
+    const citations: OverviewCitation[] = []
     const seen = new Set<string>()
     for (const a of all('a.md_citlink', root)) {
         const url = resolveBingUrl(attr(a, 'href'))
         if (!url || seen.has(url)) continue
         seen.add(url)
-        sources.push({
-            name: text(one('.md_citlink__site', a)),
-            url,
-            favicon: citFavicon(a),
-        })
+        const citation: OverviewCitation = { url }
+        // 链接内可见文本只有「图标 + 站点名」，没有页标题，所以 title 留空不编造
+        const site = text(one('.md_citlink__site', a))
+        if (site) citation.site = site
+        const favicon = citFavicon(a)
+        if (favicon) citation.favicon = favicon
+        citations.push(citation)
     }
 
-    if (!title && paragraphs.length === 0 && sources.length === 0)
+    if (!title && paragraphs.length === 0 && citations.length === 0)
         return undefined
-    return { kind: 'cht', title, paragraphs, sources }
+    return { kind: 'cht', title, paragraphs, citations }
 }
 
 /** gs 型：正文 .gs_p，引用 .gs_cit（与正文是兄弟节点，必须按容器找）。 */
@@ -175,7 +183,7 @@ function readGs(container: Element): Overview | undefined {
     }
     if (!title && paragraphs.length > 0) title = paragraphs[0].slice(0, 80)
 
-    const sources: OverviewSource[] = []
+    const citations: OverviewCitation[] = []
     const seen = new Set<string>()
     for (const c of all('.gs_cit', container)) {
         let url = resolveBingUrl(attr(c, 'data-url'))
@@ -183,24 +191,17 @@ function readGs(container: Element): Overview | undefined {
         if (hash > 0) url = url.slice(0, hash)
         if (!url || seen.has(url)) continue
         seen.add(url)
-        let name = attr(c, 'data-displayname') ?? ''
-        if (!name) {
-            try {
-                name = new URL(url).hostname
-            } catch {
-                /* 保留空名 */
-            }
-        }
-        sources.push({
-            name,
-            url,
-            favicon: attr(one('.rms_iac[data-src]', c), 'data-src'),
-        })
+        const citation: OverviewCitation = { url }
+        const site = attr(c, 'data-displayname')
+        if (site) citation.site = site
+        const favicon = attr(one('.rms_iac[data-src]', c), 'data-src')
+        if (favicon) citation.favicon = favicon
+        citations.push(citation)
     }
 
-    if (!title && paragraphs.length === 0 && sources.length === 0)
+    if (!title && paragraphs.length === 0 && citations.length === 0)
         return undefined
-    return { kind: 'gs', title, paragraphs, sources }
+    return { kind: 'gs', title, paragraphs, citations }
 }
 
 /** 提取答案摘要：先 cht 后 gs。 */

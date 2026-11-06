@@ -28,14 +28,16 @@ Bing 搜索逆向：用全局 `fetch` + HTML SSR 抓取 cn.bing.com 的搜索结
 
 ```
 src/
-  index.ts      对外门面
-  contract.ts   对外契约（纯类型）
-  shape.ts      出口裁剪
+  index.ts      对外门面（只导出 searchByBing 与 SearchResult）
+  entrance.ts   入口推测（显式优先，缺省按运行时区）
+  contract.ts   实现侧契约类型（对外出处是 types/bing-search-reverse.d.ts）
+  shape.ts      出口裁剪（includeRichContents / includeImages / includeVideos）
   protocol.ts   Bing 协议事实（零依赖叶子）
   search.ts     编排：两遍请求 + 重试 + PAA + 出口裁剪
   net/          发请求：session / headers / errors / gec / paa
   utils/        与 Bing 无关的工具：ua / time / url / collect
   parse/        解析层（纯函数，零 IO）
+types/          手写的对外契约 bing-search-reverse.d.ts（README 指向它）
 tests/          offline（零网络）/ live（需网络）/ fixtures（离线样本）
 tools/          产出物脚本：capture-samples；构建 = `rollup -c`
 docs/           架构 / 协议 / 解析 / 入口对比（就是上面四份）

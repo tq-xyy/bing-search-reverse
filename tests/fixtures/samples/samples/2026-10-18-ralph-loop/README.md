@@ -13,6 +13,12 @@ npx tsx scripts/tools/bing-search.ts "Ralph Wiggum loop"
 | cli-run-1.json         | CLI「Ralph 循环」         | 1573ms，10 条                                                              |
 | cli-run-2-en.json      | CLI「Ralph Wiggum loop」  | 1676ms，10 条                                                              |
 
+> ⚠️ **这三个 JSON 是 2026-10-18 的历史快照，字段形态属于当时的旧契约**
+> （`date` / `ms` / `query` 等），不会随库演进跟改。当前契约见
+> [types/bing-search-reverse.d.ts](../../../../../types/bing-search-reverse.d.ts)：
+> 时间字段统一为 `publishedAt`、调用级元信息是 `entrance` + `elapsedMs`。
+> 它们只作当时返回内容的证据，**不要当类型样本读**。
+
 ## 观测
 
 - 中文查询 10/10 相关，0 条 Ralph Lauren 噪音；snippet 10/10 命中，2 条缺 date。

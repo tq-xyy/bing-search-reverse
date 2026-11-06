@@ -39,272 +39,36 @@ r.relatedQuestions[0].answer // PAA answer body, loaded by default
 
 ## API
 
-```ts
-function searchByBing(
-    query: string,
-    options?: SearchOptions
-): Promise<SearchResult>
+The full types are in [the TypeScript definition](https://github.com/tq-xyy/bing-search-reverse/blob/main/types/bing-search-reverse.d.ts), the single source
+of truth for the public contract. Three things to know:
 
-interface SearchOptions {
-    /**
-     * Entrance: 'cn' domestic / 'international'.
-     * Inferred from the runtime time zone by default: China mainland, Hong Kong, Macau and
-     * Taiwan → 'cn', everything else → 'international'.
-     */
-    bingEnterance?: 'cn' | 'international'
-    /** Load PAA answer bodies (default true). Turning it off saves one request round. */
-    loadRelatedAnswers?: boolean
-    /** Concurrency cap for PAA answer loading (default 3). */
-    relatedAnswerConcurrency?: number
-    /** Keep favicon / logo / source icons (default false). Icons are ~19% of returned characters. */
-    includeIcons?: boolean
-    /** Keep the top-level images card (default false). It can reach 60% of returned characters. */
-    includeImages?: boolean
-    /** Keep type:'video' entries (default false). Does not affect an inline WebPage.video. */
-    includeVideos?: boolean
-}
+- **All four result types share one normalized shape**: `type` / `title` / `url` / `snippet` /
+  `site` / `publishedAt`. Type-specific fields and pure rendering material (icons, side images,
+  rich cards, deep links, thumbnails) live in `richContents`, which is omitted by default —
+  pass `includeRichContents` to keep it. Two more switches control the aggregated levels:
+  `includeImages` gates the top-level `images`, `includeVideos` gates `video` entries in `pages`
+  (a video embedded inside a web page follows `includeRichContents` and is unaffected by
+  `includeVideos`).
+- **Failures throw, they do not return empty results**: network and HTTP errors are thrown, including
+  after retries are exhausted. An empty `pages` means Bing genuinely returned nothing.
+- **Metadata sits at the top level**: `entrance` is the entrance that actually took effect (explicit
+  or inferred from the time zone), and `elapsedMs` is the wall-clock cost including retries and PAA
+  loading.
 
-interface SearchResult {
-    /** Result stream, document order. Four types interleaved; discriminate with `type`. */
-    pages: SearchResultPage[]
-    /** AI Overview. Present for roughly 8%~33% of queries; absent entirely otherwise. */
-    overview?: Overview
-    /** PAA (People Also Ask). Answer bodies loaded by default; a failed load only drops `answer`. */
-    relatedQuestions: RelatedQuestion[]
-    /** Related searches. Observed 0~10 entries; long queries often yield 0. */
-    relatedSearches: string[]
-    /** Images card, aggregated at the top level, never inside `pages`. Stripped by default. */
-    images?: ImageCard
-    /** Bing's typo-correction hint. Absent for normal queries. */
-    correct?: QueryCorrection
-}
+### Time is a bare string; its length carries the precision
 
-/** One entry in the result stream; four types, discriminated by `type`. */
-type SearchResultPage = WebPage | PdfPage | VideoPage | NewsPage
+`publishedAt` is not an exact instant and has no companion `*Precision` field — how far it can be
+trusted follows from the string length:
 
-interface WebPage {
-    type: 'page'
-    /** Title. Does not include document markers such as [PDF] that Bing sends alongside it. */
-    title: string
-    /** Decoded absolute URL (ck/a redirects resolved, relative paths expanded). */
-    url: string
-    /** Snippet body, with the leading index-date prefix stripped off. */
-    snippet?: string
-    /**
-     * Bing's index/update date, truncated to precision, e.g. '2026-10-05'.
-     * This is when the page was indexed, not when the underlying event happened.
-     * Absent means Bing did not supply it.
-     */
-    date?: string
-    /** Precision of `date`: 'day' / 'hour' / 'minute', matching the truncation granularity. */
-    datePrecision?: DatePrecision
-    /** Bing's display name, passed through verbatim and possibly mislabelled. Trust the URL hostname. */
-    site?: string
-    /** Site icon URL. Stripped by the exit shaper by default; needs includeIcons. */
-    favicon?: string
-    /** Side image shown next to the result. */
-    sideImage?: SideImage
-    /** Rich card: the expanded sidebar content. */
-    rich?: RichCard
-    /** Deep links / sub-links, capped at 20, deduplicated by URL. */
-    links?: LinkItem[]
-    /** Inline video summary. Unaffected by includeVideos. */
-    video?: InlineVideo
-}
+| Length | Shape              | Meaning               |
+| ------ | ------------------ | --------------------- |
+| 10     | `2026-10-05`       | trusted to the day    |
+| 13     | `2026-10-05T14`    | trusted to the hour   |
+| 16     | `2026-10-05T14:30` | trusted to the minute |
 
-/** Document-type primary result: an entry Bing tagged with [PDF]. */
-/** Fields are identical to WebPage; only the discriminant differs. */
-/** The decision reads the marker only, never the URL suffix. */
-interface PdfPage extends Omit<WebPage, 'type'> {
-    type: 'pdf'
-}
-
-interface VideoPage {
-    type: 'video'
-    /** Entries expanded from a video card are always 'card'; inline videos are 'inline' and never standalone. */
-    source: 'card'
-    title: string
-    url: string
-    /** Card header: title and the "more videos" link. */
-    card: { title: string; moreUrl?: string }
-    /** Thumbnail URL. */
-    thumbnail?: string
-    /** Duration as shown, e.g. '12:34'. */
-    duration?: string
-    /** Source site name. */
-    site?: string
-    /** Uploader / channel. */
-    uploader?: string
-    /** View count as shown, e.g. '1.2万次观看'. */
-    views?: string
-    /** Upload time, truncated to precision. */
-    published?: string
-    /** Precision of `published`. */
-    publishedPrecision?: DatePrecision
-    /** Video description. */
-    description?: string
-}
-
-interface NewsPage {
-    type: 'news'
-    title: string
-    url: string
-    /** Snippet body. */
-    snippet?: string
-    /** Publisher name, e.g. '凤凰网科技'. */
-    source?: string
-    /** Publication time, truncated to precision. */
-    time?: string
-    /** Precision of `time`. */
-    timePrecision?: DatePrecision
-    /** Publisher logo URL. Stripped by the exit shaper by default; needs includeIcons. */
-    logo?: string
-    /** Card header: the title of the whole news card. */
-    card: { title?: string }
-}
-
-/** Time precision: down to the minute / the hour / the day. */
-type DatePrecision = 'minute' | 'hour' | 'day'
-
-interface Overview {
-    /** Two DOMs with different body shapes: 'cht' is rendered Markdown, 'gs' is paragraph text. */
-    kind: 'cht' | 'gs'
-    /** Overview title. The gs variant falls back to the first 80 characters of the body. */
-    title: string
-    /** Body blocks as Markdown fragments. Lists, code blocks and ## headings are restored. */
-    paragraphs: string[]
-    /** Cited sources, deduplicated by URL. */
-    sources: OverviewSource[]
-}
-
-interface OverviewSource {
-    /** Source site name. The gs variant falls back to the URL hostname when missing. */
-    name: string
-    url: string
-    /** Source icon. Stripped by default; needs includeIcons. */
-    favicon?: string
-}
-
-interface RelatedQuestion {
-    /** The question text. */
-    question: string
-    /** URL of the answer source page, taken from .b_paa_ansContainer's data-url. */
-    sourceUrl?: string
-    /** Answer body. Loaded by default; a failed load drops the field but keeps the question. */
-    answer?: string
-    /** Sources cited inside the answer. */
-    citations?: RelatedAnswerCitation[]
-}
-
-interface RelatedAnswerCitation {
-    title?: string
-    /** Source site name. */
-    site?: string
-    url: string
-    /** Source icon. Stripped by default; needs includeIcons. */
-    favicon?: string
-}
-
-interface ImageCard {
-    /** Card header title. */
-    title: string
-    /** Card header link, pointing at "see more images". */
-    url?: string
-    moreUrl?: string
-    /** Image entries, capped at 20, deduplicated by thumbnail URL. */
-    items: ImageItem[]
-}
-
-interface ImageItem {
-    /** Thumbnail URL. This is the dedup key for `items`, hence required. */
-    thumbnailUrl: string
-    /** Image title, from .imgInfo's title or the link's aria-label. */
-    title: string
-    /** Bing's image detail page URL (ck/a already resolved). */
-    detailUrl: string
-    /**
-     * Direct link to the full-size image, decoded from detailUrl's mediaurl parameter.
-     * When the outer link is a Bing R-C proxy, sourceUrl unwraps one more layer (riu).
-     */
-    mediaUrl?: string
-    /** URL of the page the image came from. */
-    sourceUrl?: string
-    /** Displayed thumbnail width and height, from .cico's style. */
-    width?: number
-    height?: number
-    /** Full-size image width and height, from detailUrl's expw / exph parameters. */
-    originalWidth?: number
-    originalHeight?: number
-    /** Bing's image ID, from detailUrl's thid parameter. */
-    id?: string
-}
-
-/** Query-correction hint. Both `hint` and `correctedQuery` are passed through verbatim. */
-interface QueryCorrection {
-    /**
-     * The full sentence, assembled from two .b_promtxt nodes in document order.
-     * It must be given whole: the first half alone reads like a normal heading, and it is the
-     * second half that spells out "you searched wrong".
-     */
-    hint: string
-    /** The query Bing suggests instead. */
-    correctedQuery: string
-}
-
-interface RichCard {
-    /** Card header title (the hero text of b_rcGbMod). */
-    title?: string
-    /** Card header link. */
-    url?: string
-    /** Expanded sections, capped at 20. */
-    sections: RichSection[]
-    /** Images inside the card, from each node's data-src. */
-    images?: string[]
-}
-
-interface RichSection {
-    title: string
-    /** Body. The b_richcard variant joins multiple list items with newlines. */
-    text: string
-    url?: string
-}
-
-interface SideImage {
-    /** Thumbnail URL. */
-    thumbnailUrl: string
-    /** Detail page URL opened on click. */
-    detailUrl?: string
-    /** Full-size width and height, from the img's data-width / data-height. */
-    width?: number
-    height?: number
-}
-
-interface LinkItem {
-    title: string
-    /** Already expanded to an absolute address. */
-    url: string
-}
-
-/** Inline video summary inside a primary result, attached as WebPage.video. */
-interface InlineVideo {
-    source: 'inline'
-    url?: string
-    thumbnail?: string
-    duration?: string
-    site?: string
-    uploader?: string
-    views?: string
-    published?: string
-    publishedPrecision?: DatePrecision
-    description?: string
-}
-```
-
-### Time fields are truncated to precision
-
-`WebPage.date` / `VideoPage.published` / `NewsPage.time` are not exact instants; see the matching
-`*Precision` field: `day` → `YYYY-MM-DD`, `hour` → `YYYY-MM-DD HH`, `minute` → `YYYY-MM-DD HH:mm`.
-Relative wording on Bing ("6 days ago") is resolved to absolute time, but no instant is fabricated.
+Lexicographic order equals chronological order for all three lengths, so sorting needs no `Date`.
+Bing's relative wording ("6 days ago") is resolved against local time, but **no fabricated
+`00:00:00` is appended**.
 
 ### Known limits
 
@@ -312,8 +76,8 @@ Relative wording on Bing ("6 days ago") is resolved to absolute time, but no ins
   Overview and all enrichment modules.
 - **No result judging or credibility scoring**: `pages` is exactly what Bing returned; the library
   does not label results as degraded or spam.
-- **No time filtering**: `date` is Bing's crawl/update date, not when the event happened; it is only
-  a sorting hint.
+- **No time filtering**: `publishedAt` is Bing's crawl/update date on web results, not when the
+  event happened; it is only a sorting hint.
 - **No derived `host` field**: the source is whatever hostname the `url` carries.
 - AI Overview coverage is roughly 8%~33%, depending on the query.
 
@@ -322,7 +86,7 @@ Relative wording on Bing ("6 days ago") is resolved to absolute time, but no ins
 ```bash
 pnpm install
 
-pnpm test          # everything: types + offline + live (incl. 24-query stress) ≈ 15s
+pnpm test          # everything: types + offline + live (incl. 24-query stress) ≈ 20s
 pnpm test:offline
 pnpm test:live     # hits Bing for real
 pnpm build         # → dist/bing.js + dist/bing.d.ts

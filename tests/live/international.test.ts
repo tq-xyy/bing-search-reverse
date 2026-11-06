@@ -7,7 +7,8 @@
  *   · 两个入口的解析结果都不允许出现 ck/a 残留。
  *
  * 不按时区推测的那条路径在离线测试（tests/offline/entrance.test.ts）里钉住，
- * 因为「运行机器在哪个时区」不该决定在线测试的结果。
+ * 因为「运行机器在哪个时区」不该决定在线测试的结果——同一份代码在 CI（UTC）
+ * 与本机（Asia/Shanghai）会推测出相反的入口。
  */
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
@@ -60,9 +61,9 @@ describe('入口：cn vs international', () => {
         )
     })
 
-    it('searchByBing 尊重 bingEnterance 参数', async () => {
+    it('searchByBing 尊重 bingEntrance 参数', async () => {
         const r = await searchByBing('kubernetes pod scheduling', {
-            bingEnterance: 'international',
+            bingEntrance: 'international',
         })
         assert.ok(r.pages.length > 0)
         // 国际版结果以国际站点为主：首条不是中文站

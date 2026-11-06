@@ -58,7 +58,7 @@ CN Bing 搜索页右上角有「国内版 / 国际版」两个 div（#est_cn / #
 会话握手**不区分入口**：继续用 getSession()（cn.bing.com/ 首页），
 因为浏览器里点「国际版」也是从国内首页进去的。
 
-入口选择：`searchByBing` 的 `bingEnterance` 参数（`cn` / `international`）。
+入口选择：`searchByBing` 的 `bingEntrance` 参数（`cn` / `international`）。
 不传时按运行时时区推测：中国大陆与港澳台时区 → `cn`，其余 → `international`。
 这个推测只是默认值，数据上并不成立——见 [ENTRANCES.md](ENTRANCES.md) 的「该用哪个：判据」。
 

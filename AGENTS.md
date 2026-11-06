@@ -7,10 +7,11 @@
 
 | 项       | 内容                                                                                                                                                         |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 对外入口 | `searchByBing(query, options?): Promise<SearchResult>`，见 [src/index.ts](src/index.ts)。契约类型在 [src/contract.ts](src/contract.ts)                       |
+| 对外入口 | `searchByBing(query, options?): Promise<SearchResult>`，见 [src/index.ts](src/index.ts)                                                                      |
+| 契约出处 | 手写的 [types/bing-search-reverse.d.ts](types/bing-search-reverse.d.ts) 是对外契约的**唯一出处**；`src/contract.ts` 是实现侧类型，必须与它对齐               |
 | 手测入口 | `npx tsx only_for_develop_fast_test.ignored.ts "查询词"` → 打印整个 `SearchResult`。被 `.gitignore` 的 `*.ignored.ts` 排除，**不入库也不删除**，仅供本机手测 |
-| 构建产物 | `dist/bing.js`（约 43KB）+ `dist/bing.d.ts`；外部依赖 `htmlparser2` / `css-select` / `tough-cookie`                                                          |
-| 工具链   | Node 26（测试用内置 `node:test`）、TypeScript 7、`tsx`、rollup + esbuild                                                                                     |
+| 构建产物 | `dist/bing.js`（约 45KB）+ `dist/bing.d.ts`；外部依赖 `htmlparser2` / `css-select` / `tough-cookie`                                                          |
+| 工具链   | 开发用 Node 26 + TypeScript 7（`package.json` 的 `engines` 是`>=20.19`，那是**运行这个包**的下限，两回事）；测试用内置 `node:test`、`tsx`、rollup + esbuild  |
 | 明确不做 | 翻页、结果裁决、时间过滤、`host` 派生字段——逐条理由见 [README.md](README.md) 的「已知边界」                                                                  |
 | 为什么不 | 首遍填充页 350–480KB，AI 摘要与富化模块全在 SSR 里                                                                                                           |
 
@@ -72,9 +73,9 @@ RAG 侧的实验记录与成本分析在 `sandbox/docs/`，**不进主文档树*
 ## 验收
 
 ```bash
-pnpm test          # 全部：类型 + 离线 + 在线（含 24 词压测）≈ 15s。改完只跑这一条
-pnpm test:offline  # 只有离线 ≈ 1.8s（改解析器时）
-pnpm test:live     # 只有在线 ≈ 12s（改请求层时）
+pnpm test          # 全部：类型 + 离线 + 在线（含 24 词压测）≈ 20s。改完只跑这一条
+pnpm test:offline  # 只有离线 ≈ 3s（改解析器时）
+pnpm test:live     # 只有在线 ≈ 17s，随网络波动（改请求层时）
 pnpm build         # dist/bing.js + dist/bing.d.ts
 ```
 
